@@ -1,36 +1,691 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<title>JS TEST (PAGES)</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Office Birds — Level 1</title>
+  <style>
+    html,body{margin:0;height:100%;background:#050b14;overflow:hidden;font-family:system-ui,-apple-system,Segoe UI,Roboto}
+    canvas{display:block}
+
+    /* HUD */
+    .hud{
+      position:fixed; left:16px; top:14px; z-index:20;
+      display:flex; gap:10px; align-items:center;
+      padding:10px 12px;
+      background:rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:14px;
+      color:#eaf2ff;
+      box-shadow:0 10px 28px rgba(0,0,0,.35);
+      backdrop-filter: blur(10px);
+    }
+    .pill{
+      font-weight:800; font-size:12px; letter-spacing:.5px;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid rgba(124,247,255,.18);
+      background:rgba(124,247,255,.10);
+    }
+    .sub{opacity:.8;font-size:12px}
+    .btn{
+      cursor:pointer; user-select:none;
+      border:1px solid rgba(255,255,255,.16);
+      background:rgba(255,255,255,.08);
+      color:#fff; font-weight:800;
+      padding:8px 10px; border-radius:12px;
+    }
+    .btn:hover{background:rgba(255,255,255,.12)}
+    .btn:active{transform:translateY(1px)}
+    .rightHint{
+      position:fixed; right:16px; top:14px; z-index:20;
+      max-width:320px;
+      padding:10px 12px;
+      background:rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:14px;
+      color:#eaf2ff;
+      box-shadow:0 10px 28px rgba(0,0,0,.35);
+      backdrop-filter: blur(10px);
+      font-size:12px; opacity:.9;
+    }
+
+    /* Loader */
+    #loader{
+      position:fixed; inset:0; z-index:50;
+      display:flex; align-items:center; justify-content:center;
+      background:radial-gradient(circle at 20% 15%, #133a63 0%, #050b14 58%, #02050b 100%);
+      color:#eaf2ff;
+    }
+    #loaderBox{
+      width:340px;
+      padding:16px;
+      border-radius:14px;
+      background:rgba(255,255,255,0.07);
+      border:1px solid rgba(255,255,255,0.10);
+      box-shadow:0 18px 55px rgba(0,0,0,0.45);
+    }
+    #loaderTitle{font-weight:900}
+    #pct{float:right;opacity:.75}
+    #bar{height:10px;background:#0b1c30;border-radius:8px;overflow:hidden;margin-top:10px}
+    #bar>div{height:100%;width:0%;background:linear-gradient(90deg,#4fd1c5,#63b3ed);transition:width .18s}
+    #small{margin-top:10px;opacity:.65;font-size:12px;line-height:1.35}
+    #win{
+      position:fixed; inset:0; z-index:40;
+      display:none; align-items:center; justify-content:center;
+      background:rgba(0,0,0,.45);
+      backdrop-filter: blur(6px);
+    }
+    #winCard{
+      width:min(520px,92vw);
+      padding:18px;
+      border-radius:16px;
+      background:rgba(255,255,255,0.08);
+      border:1px solid rgba(255,255,255,0.14);
+      color:#fff;
+      box-shadow:0 18px 55px rgba(0,0,0,0.55);
+      text-align:center;
+    }
+    #winCard h2{margin:0 0 6px 0}
+    #winCard p{margin:0 0 14px 0;opacity:.85}
+  </style>
 </head>
+<body>
+  <div class="hud">
+    <span class="pill">LEVEL 1</span>
+    <div>
+      <div style="font-weight:900">Office Birds</div>
+      <div class="sub">Зажми на “человеке на стуле” → потяни → отпусти</div>
+    </div>
+    <button class="btn" id="resetBtn">Reset</button>
+  </div>
 
-<body style="background:#000;color:#0f0;font-size:32px">
+  <div class="rightHint" id="goalBox">
+    <b>Цель:</b> развали офисный домик и “сбей” всех офисников в наушниках.<br/>
+    <span style="opacity:.75">Фишка: пока не трогаешь — он качается на стуле.</span>
+  </div>
 
-<h1>JS TEST</h1>
-<div id="out">loading…</div>
+  <div id="loader">
+    <div id="loaderBox">
+      <div id="loaderTitle">Грузим офисный цирк… <span id="pct">0%</span></div>
+      <div id="bar"><div></div></div>
+      <div id="small">
+        Если зависло — проверь, что файлы лежат по путям:<br/>
+        <code>assets/player/chair.png</code>, <code>assets/player/human_idle.png</code>, <code>assets/player/human_fly.png</code>
+      </div>
+    </div>
+  </div>
+
+  <div id="win">
+    <div id="winCard">
+      <h2>Победа! ✅</h2>
+      <p>Офисники больше не на созвоне 😄</p>
+      <button class="btn" id="winReset">Сыграть ещё</button>
+    </div>
+  </div>
+
+  <canvas id="c"></canvas>
 
 <script>
-console.log("JS STARTED");
+(() => {
+  /* ======================= ASSETS ======================= */
+  const ASSETS = {
+    chair: "assets/player/chair.png",
+    idle:  "assets/player/human_idle.png",
+    fly:   "assets/player/human_fly.png"
+  };
 
-document.getElementById("out").textContent = "JS WORKS ✅";
+  const IMG = {};
+  const loader = document.getElementById("loader");
+  const pct = document.getElementById("pct");
+  const bar = document.querySelector("#bar > div");
 
-const img = new Image();
+  function loadImage(key, url, i, total){
+    return new Promise((res, rej) => {
+      const img = new Image();
+      img.onload = () => {
+        IMG[key] = img;
+        const p = Math.round(((i+1)/total)*100);
+        pct.textContent = p + "%";
+        bar.style.width = p + "%";
+        res();
+      };
+      img.onerror = () => rej(new Error("Не загрузилось: " + url));
+      img.src = url + "?v=" + Date.now(); // anti-cache для тестов
+    });
+  }
 
-img.onload = () => {
-  document.body.append(" PNG LOADED ✅");
-  document.body.appendChild(document.createElement("br"));
-  document.body.appendChild(img);
-};
+  /* ======================= CANVAS ======================= */
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d");
 
-img.onerror = (e) => {
-  console.error("IMG ERROR", e);
-  document.body.append(" PNG ERROR ❌");
-};
+  function resize(){
+    canvas.width = innerWidth;
+    canvas.height = innerHeight;
+  }
+  addEventListener("resize", () => { resize(); reset(); });
+  resize();
 
-// ✅ ПРАВИЛЬНО ДЛЯ GITHUB PAGES
-img.src = "assets/player/chair.png?v=" + Date.now();
+  /* ======================= CONFIG ======================= */
+  const CFG = {
+    gravity: 0.85,
+    air: 0.995,
+    floorYPad: 40,
+
+    // launch
+    launchK: 0.22,
+    maxPull: 230,
+    minPull: 22,
+
+    // idle rocking
+    idleRockAmp: 6,
+    idleRockSpeed: 0.035,
+
+    // physics blocks
+    iterations: 4,
+    restitution: 0.25,
+    blockFric: 0.86,
+    blockAir: 0.995,
+
+    // win conditions
+    npcFallYExtra: 120
+  };
+
+  /* ======================= UTILS ======================= */
+  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+  const dist2 = (ax,ay,bx,by)=>{const dx=ax-bx, dy=ay-by; return dx*dx+dy*dy;};
+
+  function background(){
+    const g = ctx.createRadialGradient(canvas.width*0.2, canvas.height*0.2, 40, canvas.width*0.2, canvas.height*0.2, canvas.height);
+    g.addColorStop(0, "rgba(16,44,78,0.95)");
+    g.addColorStop(1, "rgba(5,11,20,1)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
+
+  function anchorPoint(){
+    return { x: Math.round(canvas.width*0.18), y: Math.round(canvas.height*0.72) };
+  }
+
+  function floorY(){
+    return canvas.height - CFG.floorYPad;
+  }
+
+  /* ======================= GAME STATE ======================= */
+  let t=0;
+  let dragging=false;
+  let hasLaunched=false;
+
+  // player (human)
+  const player = { x:0,y:0, vx:0,vy:0, r:34, flying:false };
+
+  // chair
+  const chair = { x:0, y:0, w:150, h:150 };
+
+  // blocks (simple AABB physics)
+  let blocks = [];
+  let npcs = [];
+
+  let winShown=false;
+
+  function spawnLevel1(){
+    blocks = [];
+    npcs = [];
+
+    // "Office tower" near right side
+    const baseX = Math.round(canvas.width*0.78);
+    const baseY = floorY();
+
+    // helper: add block
+    const addBlock = (x,y,w,h,staticBlock=false) => {
+      blocks.push({
+        x,y,w,h,
+        vx:0, vy:0,
+        static: staticBlock,
+        // mass ~ area
+        invM: staticBlock ? 0 : 1 / Math.max(1, w*h*0.002)
+      });
+    };
+
+    // floor base platform under tower
+    addBlock(baseX, baseY+18, 420, 18, true);
+
+    // bottom layer
+    addBlock(baseX-120, baseY-20, 80, 24);
+    addBlock(baseX+120, baseY-20, 80, 24);
+    addBlock(baseX,     baseY-40, 280, 24);
+
+    // middle posts + plank
+    addBlock(baseX-90,  baseY-110, 26, 120);
+    addBlock(baseX+90,  baseY-110, 26, 120);
+    addBlock(baseX,     baseY-170, 220, 22);
+
+    // top small table
+    addBlock(baseX,     baseY-240, 170, 20);
+    addBlock(baseX-60,  baseY-295, 22, 110);
+    addBlock(baseX+60,  baseY-295, 22, 110);
+    addBlock(baseX,     baseY-350, 140, 18);
+
+    // NPCs (circles) sit on some planks
+    const addNpc = (x,y) => {
+      npcs.push({ x,y, vx:0, vy:0, r:20, alive:true });
+    };
+    addNpc(baseX, baseY-70);
+    addNpc(baseX, baseY-200);
+    addNpc(baseX, baseY-370);
+  }
+
+  function reset(){
+    const a = anchorPoint();
+    chair.x = a.x; chair.y = a.y;
+
+    player.x = chair.x;
+    player.y = chair.y - 70;
+    player.vx = 0; player.vy = 0;
+    player.flying = false;
+
+    dragging=false;
+    hasLaunched=false;
+
+    spawnLevel1();
+    winShown=false;
+    document.getElementById("win").style.display = "none";
+  }
+
+  /* ======================= INPUT ======================= */
+  canvas.addEventListener("mousedown", (e) => {
+    if (winShown) return;
+    if (hasLaunched) return; // один выстрел на попытку
+    const mx = e.offsetX, my = e.offsetY;
+    if (dist2(mx,my, player.x,player.y) <= (player.r+10)*(player.r+10)){
+      dragging = true;
+    }
+  });
+
+  addEventListener("mouseup", () => {
+    if (!dragging) return;
+    dragging = false;
+
+    const a = anchorPoint();
+    const dx = player.x - a.x;
+    const dy = player.y - a.y;
+    const pull = Math.sqrt(dx*dx+dy*dy);
+
+    if (pull < CFG.minPull) {
+      // вернём на стул если слабое натяжение
+      player.x = chair.x;
+      player.y = chair.y - 70;
+      return;
+    }
+
+    // ВАЖНО: летит В СТОРОНУ натяжения (как тебе нужно было раньше)
+    player.vx = dx * CFG.launchK;
+    player.vy = dy * CFG.launchK;
+
+    player.flying = true;
+    hasLaunched = true;
+  });
+
+  canvas.addEventListener("mousemove", (e) => {
+    if (!dragging) return;
+    const a = anchorPoint();
+    const mx = e.offsetX, my = e.offsetY;
+
+    const dx = mx - a.x;
+    const dy = my - a.y;
+    const pull = Math.sqrt(dx*dx+dy*dy);
+
+    if (pull > CFG.maxPull) {
+      const k = CFG.maxPull / pull;
+      player.x = a.x + dx*k;
+      player.y = a.y + dy*k;
+    } else {
+      player.x = mx;
+      player.y = my;
+    }
+  });
+
+  document.getElementById("resetBtn").addEventListener("click", reset);
+  document.getElementById("winReset").addEventListener("click", reset);
+
+  /* ======================= COLLISIONS ======================= */
+
+  // circle vs AABB (player/npc vs block)
+  function circleAABBResolve(c, b, bounce=0.25){
+    // find closest point on AABB to circle center
+    const halfW = b.w/2, halfH=b.h/2;
+    const cx = c.x, cy=c.y;
+
+    const closestX = clamp(cx, b.x-halfW, b.x+halfW);
+    const closestY = clamp(cy, b.y-halfH, b.y+halfH);
+
+    const dx = cx - closestX;
+    const dy = cy - closestY;
+    const d2 = dx*dx + dy*dy;
+    if (d2 > c.r*c.r) return false;
+
+    const d = Math.sqrt(Math.max(0.00001, d2));
+    const nx = dx / d;
+    const ny = dy / d;
+
+    // push out
+    const overlap = c.r - d;
+    c.x += nx * overlap;
+    c.y += ny * overlap;
+
+    // bounce velocity along normal
+    const vn = c.vx*nx + c.vy*ny;
+    if (vn < 0) {
+      c.vx -= (1 + bounce) * vn * nx;
+      c.vy -= (1 + bounce) * vn * ny;
+    }
+
+    // transfer some impulse to block (if dynamic)
+    if (!b.static && b.invM > 0) {
+      // simplistic: block gets a bit of opposite velocity
+      b.vx += (nx * overlap) * 0.18;
+      b.vy += (ny * overlap) * 0.18;
+    }
+    return true;
+  }
+
+  // AABB vs AABB resolve for blocks (very simple)
+  function aabbResolve(a, b){
+    if (a.static && b.static) return;
+
+    const ax1 = a.x - a.w/2, ax2 = a.x + a.w/2;
+    const ay1 = a.y - a.h/2, ay2 = a.y + a.h/2;
+    const bx1 = b.x - b.w/2, bx2 = b.x + b.w/2;
+    const by1 = b.y - b.h/2, by2 = b.y + b.h/2;
+
+    if (ax1>=bx2 || ax2<=bx1 || ay1>=by2 || ay2<=by1) return;
+
+    // overlap amounts
+    const ox = Math.min(ax2-bx1, bx2-ax1);
+    const oy = Math.min(ay2-by1, by2-ay1);
+
+    // push along smaller overlap
+    if (ox < oy){
+      const dir = (a.x < b.x) ? -1 : 1;
+      const push = ox * dir;
+
+      if (!a.static) a.x += push * 0.5;
+      if (!b.static) b.x -= push * 0.5;
+
+      // exchange velocity
+      const av = a.vx, bv = b.vx;
+      if (!a.static) a.vx = bv * CFG.restitution;
+      if (!b.static) b.vx = av * CFG.restitution;
+    } else {
+      const dir = (a.y < b.y) ? -1 : 1;
+      const push = oy * dir;
+
+      if (!a.static) a.y += push * 0.5;
+      if (!b.static) b.y -= push * 0.5;
+
+      const av = a.vy, bv = b.vy;
+      if (!a.static) a.vy = bv * CFG.restitution;
+      if (!b.static) b.vy = av * CFG.restitution;
+    }
+  }
+
+  /* ======================= UPDATE ======================= */
+  function updatePlayer(){
+    const a = anchorPoint();
+
+    // idle rocking (if not launched and not dragging)
+    if (!hasLaunched && !dragging){
+      t += 1;
+      const off = Math.sin(t*CFG.idleRockSpeed) * CFG.idleRockAmp;
+      player.x = chair.x + off;
+      player.y = chair.y - 70 + Math.abs(Math.sin(t*CFG.idleRockSpeed))*2;
+      return;
+    }
+
+    if (!player.flying) return;
+
+    player.vy += CFG.gravity;
+    player.vx *= CFG.air;
+    player.vy *= CFG.air;
+    player.x += player.vx;
+    player.y += player.vy;
+
+    // floor
+    const fy = floorY();
+    if (player.y > fy){
+      player.y = fy;
+      player.vy = -player.vy * 0.25;
+      player.vx *= 0.78;
+      if (Math.abs(player.vx) < 0.25 && Math.abs(player.vy) < 0.25){
+        player.flying = false;
+      }
+    }
+
+    // collide with blocks
+    for (const b of blocks){
+      circleAABBResolve(player, b, 0.20);
+    }
+  }
+
+  function updateBlocks(){
+    const fy = floorY();
+
+    for (const b of blocks){
+      if (b.static) continue;
+      b.vy += CFG.gravity;
+      b.vx *= CFG.blockAir;
+      b.vy *= CFG.blockAir;
+      b.x += b.vx;
+      b.y += b.vy;
+
+      // floor
+      const bottom = b.y + b.h/2;
+      if (bottom > fy){
+        b.y = fy - b.h/2;
+        b.vy = -b.vy * CFG.restitution;
+        b.vx *= CFG.blockFric;
+        if (Math.abs(b.vx) < 0.08) b.vx = 0;
+        if (Math.abs(b.vy) < 0.08) b.vy = 0;
+      }
+    }
+
+    // block-block resolve iterations
+    for (let it=0; it<CFG.iterations; it++){
+      for (let i=0;i<blocks.length;i++){
+        for (let j=i+1;j<blocks.length;j++){
+          aabbResolve(blocks[i], blocks[j]);
+        }
+      }
+    }
+  }
+
+  function updateNPC(){
+    const fy = floorY();
+
+    for (const n of npcs){
+      if (!n.alive) continue;
+
+      // gravity
+      n.vy += CFG.gravity;
+      n.vx *= 0.992;
+      n.vy *= 0.992;
+      n.x += n.vx;
+      n.y += n.vy;
+
+      // collide with blocks
+      for (const b of blocks){
+        const hit = circleAABBResolve(n, b, 0.12);
+        if (hit && !b.static) {
+          // если блок двигается — NPC может "съехать"
+          n.vx += b.vx * 0.12;
+        }
+      }
+
+      // collide with player (пинок)
+      const d2 = dist2(n.x,n.y, player.x,player.y);
+      const rr = (n.r + player.r);
+      if (d2 < rr*rr && player.flying){
+        // simple impulse away
+        const d = Math.sqrt(Math.max(0.00001, d2));
+        const nx = (n.x - player.x)/d;
+        const ny = (n.y - player.y)/d;
+        n.vx += nx * 8;
+        n.vy += ny * 6;
+      }
+
+      // floor
+      if (n.y > fy){
+        n.y = fy;
+        n.vy = -n.vy * 0.10;
+        n.vx *= 0.70;
+      }
+
+      // "сбит" если улетел вниз/вбок сильно
+      if (n.y > fy + CFG.npcFallYExtra || n.x < -200 || n.x > canvas.width + 200){
+        n.alive = false;
+      }
+    }
+  }
+
+  function checkWin(){
+    if (winShown) return;
+    const alive = npcs.filter(n=>n.alive).length;
+    if (alive === 0){
+      winShown = true;
+      document.getElementById("win").style.display = "flex";
+    }
+  }
+
+  /* ======================= DRAW ======================= */
+  function drawAnchorAndLine(){
+    const a = anchorPoint();
+
+    // stand
+    ctx.fillStyle = "rgba(255,255,255,0.10)";
+    ctx.fillRect(a.x-10, a.y-60, 20, 130);
+    ctx.fillStyle = "rgba(124,247,255,0.18)";
+    ctx.fillRect(a.x-7, a.y-54, 14, 28);
+
+    // line
+    if (dragging){
+      ctx.strokeStyle = "rgba(124,247,255,0.85)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(a.x,a.y);
+      ctx.lineTo(player.x,player.y);
+      ctx.stroke();
+    }
+  }
+
+  function drawFloor(){
+    const fy = floorY();
+    ctx.fillStyle = "rgba(255,255,255,0.06)";
+    ctx.fillRect(0, fy, canvas.width, canvas.height - fy);
+  }
+
+  function drawBlocks(){
+    for (const b of blocks){
+      // subtle glassy style
+      const grad = ctx.createLinearGradient(b.x-b.w/2, b.y-b.h/2, b.x+b.w/2, b.y+b.h/2);
+      grad.addColorStop(0, "rgba(255,255,255,0.10)");
+      grad.addColorStop(1, "rgba(255,255,255,0.05)");
+      ctx.fillStyle = grad;
+      ctx.strokeStyle = "rgba(124,247,255,0.12)";
+      ctx.lineWidth = 1;
+
+      ctx.beginPath();
+      ctx.roundRect(b.x-b.w/2, b.y-b.h/2, b.w, b.h, 8);
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+
+  function drawNPC(){
+    for (const n of npcs){
+      if (!n.alive) continue;
+
+      // body
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.r, 0, Math.PI*2);
+      ctx.fill();
+
+      // headphones ring
+      ctx.strokeStyle = "rgba(124,247,255,0.85)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.r-4, Math.PI*0.15, Math.PI*0.85);
+      ctx.stroke();
+
+      // mic
+      ctx.strokeStyle = "rgba(255,110,140,0.8)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(n.x + n.r-2, n.y + 4);
+      ctx.lineTo(n.x + n.r + 10, n.y + 10);
+      ctx.stroke();
+    }
+  }
+
+  function drawChair(){
+    ctx.drawImage(IMG.chair, chair.x-chair.w/2, chair.y-chair.h/2, chair.w, chair.h);
+  }
+
+  function drawPlayer(){
+    const img = (player.flying || hasLaunched) ? IMG.fly : IMG.idle;
+    ctx.drawImage(img, player.x-56, player.y-56, 112, 112);
+  }
+
+  /* ======================= MAIN LOOP ======================= */
+  function loop(){
+    background();
+    drawFloor();
+
+    updatePlayer();
+    updateBlocks();
+    updateNPC();
+    checkWin();
+
+    drawBlocks();
+    drawNPC();
+    drawAnchorAndLine();
+    drawChair();
+    drawPlayer();
+
+    requestAnimationFrame(loop);
+  }
+
+  /* ======================= START ======================= */
+  (async() => {
+    const entries = Object.entries(ASSETS);
+    for (let i=0;i<entries.length;i++){
+      await loadImage(entries[i][0], entries[i][1], i, entries.length);
+    }
+    loader.remove();
+
+    // polyfill-ish: roundRect for older browsers
+    if (!CanvasRenderingContext2D.prototype.roundRect) {
+      CanvasRenderingContext2D.prototype.roundRect = function(x,y,w,h,r){
+        r = Math.min(r, w/2, h/2);
+        this.beginPath();
+        this.moveTo(x+r,y);
+        this.arcTo(x+w,y,x+w,y+h,r);
+        this.arcTo(x+w,y+h,x,y+h,r);
+        this.arcTo(x,y+h,x,y,r);
+        this.arcTo(x,y,x+w,y,r);
+        this.closePath();
+        return this;
+      };
+    }
+
+    reset();
+    loop();
+  })().catch(err => {
+    console.error(err);
+    alert("Ошибка загрузки ассетов. Проверь пути в репозитории: assets/player/*.png");
+  });
+
+})();
 </script>
-
 </body>
 </html>
