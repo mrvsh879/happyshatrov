@@ -74,8 +74,7 @@
     <div class="title">Цель</div>
     <div class="hint">
       Развали домик: <b>2 pillar</b> + <b>3 beam</b> (2 этажа).<br>
-      Стол/монитор/стекло убраны.<br>
-      В центре верхнего этажа есть <b>место под менеджера</b>.
+      <b>Менеджер</b> появится в верхнем этаже, когда добавим PNG.
     </div>
   </div>
 
@@ -98,13 +97,13 @@
     // Assets
     // ===========================
     const ASSETS_REQUIRED = {
-      humanIdle: "./assets/player/human_idle.png", // сидит (со стулом в спрайте)
-      humanFly:  "./assets/player/human_fly.png",  // летит (без стула)
+      humanIdle: "./assets/player/human_idle.png",
+      humanFly:  "./assets/player/human_fly.png",
       beam:      "./assets/office/beam.png",
       pillar:    "./assets/office/pillar.png"
     };
 
-    // optional manager
+    // менеджер будет тут (прозрачный PNG)
     const ASSETS_OPTIONAL = {
       manager: "./assets/manager/manager.png"
     };
@@ -206,25 +205,75 @@
     }
 
     // ===========================
-    // Building (FIXED)
-    // 2 pillar + 3 beam
-    // beams overlap pillars => one solid frame
+    // Office background (building + windows)
+    // ===========================
+    function drawOfficeBackground(t){
+      const W = window.innerWidth, H = window.innerHeight;
+
+      // base sky
+      const g = ctx.createRadialGradient(W*0.22,H*0.25,60, W*0.22,H*0.25, Math.max(W,H));
+      g.addColorStop(0, "rgba(40,150,255,0.22)");
+      g.addColorStop(0.35, "rgba(8,22,44,0.88)");
+      g.addColorStop(1, "rgba(0,0,0,0.94)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0,0,W,H);
+
+      // distant building silhouettes
+      const base = H * 0.78;
+      ctx.fillStyle = "rgba(0,0,0,0.35)";
+      for (let i=0;i<6;i++){
+        const bw = 220 + i*70;
+        const bh = 220 + (i%3)*110;
+        const x = (i*260 - ((t*12)%260)) - 120;
+        ctx.fillRect(x, base - bh, bw, bh);
+      }
+
+      // main “office wall” with subtle window grid on right half
+      const wallX = W*0.48;
+      const wallW = W*0.58;
+      ctx.fillStyle = "rgba(10,18,28,0.45)";
+      ctx.fillRect(wallX, 0, wallW, H);
+
+      // windows
+      const cell = 46;
+      const padX = wallX + 26;
+      const padY = 30;
+      const cols = Math.floor((wallW - 60) / cell);
+      const rows = Math.floor((H - 90) / cell);
+
+      const flicker = (Math.sin(t*0.8)*0.5+0.5);
+      for (let r=0;r<rows;r++){
+        for (let c=0;c<cols;c++){
+          const x = padX + c*cell + ((t*8)%cell)*0.08; // micro parallax
+          const y = padY + r*cell;
+          const on = ((r*17 + c*23) % 11) < (4 + (flicker*2));
+          ctx.fillStyle = on ? "rgba(120,210,255,0.10)" : "rgba(255,255,255,0.03)";
+          ctx.fillRect(x, y, cell-14, cell-18);
+        }
+      }
+
+      // ground line
+      ctx.fillStyle = "rgba(255,255,255,0.08)";
+      ctx.fillRect(0, world.groundY(), W, 2);
+    }
+
+    // ===========================
+    // Building (smaller now)
     // ===========================
     function buildOfficeLayout(){
       const W = window.innerWidth;
       const H = window.innerHeight;
 
-      const scale = Math.max(1.15, Math.min(1.60, W / 1100));
+      // было крупнее — теперь меньше/компактнее
+      const scale = Math.max(0.85, Math.min(1.08, W / 1400));
 
-      // домик "квадратнее" + место под менеджера
-      const BW = 640 * scale;
-      const BH = 470 * scale;
+      const BW = 560 * scale; // ширина домика
+      const BH = 410 * scale; // высота домика
 
-      // ближе к игроку
-      const GAP = Math.max(90, Math.min(150, W * 0.08));
+      const GAP = Math.max(70, Math.min(110, W * 0.06)); // ближе к игроку
 
-      const baseY = H - BH - 46;
-      const baseX = Math.min(W - BW - 30, world.playerX + (330 * scale) + GAP);
+      const baseY = H - BH - 52;
+      const baseX = Math.min(W - BW - 24, world.playerX + (290 * scale) + GAP);
 
       const parts = [];
       const add = (type, x,y,w,h, hp, z=0) => {
@@ -235,46 +284,39 @@
         });
       };
 
-      // размеры стоек/балок под твои PNG
-      const pillarW = 120 * scale;
-      const pillarH = BH * 0.88;
+      const pillarW = 110 * scale;
+      const pillarH = BH * 0.90;
+      const beamH   = 72 * scale;
 
-      const beamH = 78 * scale;
-
-      // стойки (симметрично)
-      const leftPillarX  = baseX + 18*scale;
-      const rightPillarX = baseX + BW - pillarW - 18*scale;
+      const leftPillarX  = baseX + 16*scale;
+      const rightPillarX = baseX + BW - pillarW - 16*scale;
       const pillarY      = baseY + (BH - pillarH);
 
-      // балки должны заходить на стойки (перекрытие)
-      const over = 22 * scale; // свес/заход на pillar
+      const over = 18 * scale; // перекрытие балкой стойки
       const beamX = leftPillarX - over;
       const beamW = (rightPillarX + pillarW + over) - beamX;
 
-      // вертикальные уровни (низ / межэтажка / верх)
       const yBottom = baseY + BH - beamH - 10*scale;
-      const yMid    = baseY + (BH * 0.54) - (beamH * 0.50);
+      const yMid    = baseY + (BH * 0.55) - (beamH * 0.50);
       const yTop    = baseY + 10*scale;
 
-      // 2 pillar
       add("pillar", leftPillarX,  pillarY, pillarW, pillarH, 420, 0);
       add("pillar", rightPillarX, pillarY, pillarW, pillarH, 420, 0);
 
-      // 3 beam (одинаковая ширина, чтобы выглядело цельно)
       add("beam", beamX, yBottom, beamW, beamH, 320, 1);
       add("beam", beamX, yMid,    beamW, beamH, 320, 1);
       add("beam", beamX, yTop,    beamW, beamH, 320, 1);
 
-      // слот под менеджера (верхний этаж, центр)
+      // место под менеджера (верхний этаж, центр) — широкое
       const innerLeft  = leftPillarX + pillarW * 0.55;
-      const innerRight = rightPillarX - pillarW * 0.15;
+      const innerRight = rightPillarX - pillarW * 0.20;
       const innerW = innerRight - innerLeft;
 
       world.managerSlot = {
-        x: innerLeft + innerW * 0.33,
-        y: yTop + beamH * 0.65,
-        w: innerW * 0.34,
-        h: (yMid - yTop) * 0.75
+        x: innerLeft + innerW * 0.28,
+        y: yTop + beamH * 0.62,
+        w: innerW * 0.44,
+        h: (yMid - yTop) * 0.78
       };
 
       return parts;
@@ -315,7 +357,6 @@
       world.launched = false;
       world.proj = null;
 
-      // ближе + крупнее
       world.playerX = Math.max(34, Math.min(210, W * 0.08));
       world.playerY = H - (182 * PLAYER_SCALE) - 46;
 
@@ -385,21 +426,8 @@
     document.getElementById("resetBtn").addEventListener("click", resetWorld);
 
     // ===========================
-    // Draw
+    // Draw helpers
     // ===========================
-    function drawBackground(){
-      const W = window.innerWidth, H = window.innerHeight;
-      const g = ctx.createRadialGradient(W*0.2,H*0.2,50, W*0.2,H*0.2, Math.max(W,H));
-      g.addColorStop(0, "rgba(30,120,200,0.26)");
-      g.addColorStop(0.35, "rgba(7,18,38,0.82)");
-      g.addColorStop(1, "rgba(0,0,0,0.92)");
-      ctx.fillStyle = g;
-      ctx.fillRect(0,0,W,H);
-
-      ctx.fillStyle = "rgba(255,255,255,0.08)";
-      ctx.fillRect(0, world.groundY(), W, 2);
-    }
-
     function drawImageFit(im, x,y,w,h){ ctx.drawImage(im, x,y,w,h); }
 
     function drawOffice(){
@@ -424,9 +452,19 @@
         ctx.restore();
       }
 
+      // менеджер (появится, когда положишь PNG)
       if (world.showManager && world.managerSlot && img.manager){
         const s = world.managerSlot;
         drawImageFit(img.manager, s.x, s.y, s.w, s.h);
+      } else if (world.managerSlot) {
+        // тонкий placeholder-контур, чтобы видно было место
+        const s = world.managerSlot;
+        ctx.save();
+        ctx.strokeStyle = "rgba(120,210,255,0.18)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6,6]);
+        ctx.strokeRect(s.x, s.y, s.w, s.h);
+        ctx.restore();
       }
     }
 
@@ -577,7 +615,7 @@
 
       step(dt);
 
-      drawBackground();
+      drawOfficeBackground(now/1000);
       drawOffice();
       drawSeatedHuman(now/1000);
       drawAimBand();
