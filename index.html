@@ -5,87 +5,126 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Office Birds — Level 1</title>
   <style>
-    :root {
+    :root{
       --bg1:#0b1220;
       --panel: rgba(255,255,255,.08);
       --text: rgba(255,255,255,.92);
       --muted: rgba(255,255,255,.65);
-      --accent: #7cf7ff;
-      --danger: #ff6b8b;
+      --accent:#7cf7ff;
+      --danger:#ff6b8b;
+      --ok:#7CFFB2;
     }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
+    *{box-sizing:border-box}
+    body{
+      margin:0;
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      color: var(--text);
+      color:var(--text);
       background: radial-gradient(1200px 800px at 20% 10%, #13304a 0%, var(--bg1) 45%, #070b12 100%);
-      overflow: hidden;
+      overflow:hidden;
     }
-    #wrap { position: relative; width: 100vw; height: 100vh; }
-    canvas { display:block; width:100%; height:100%; }
+    #wrap{position:relative;width:100vw;height:100vh}
+    canvas{display:block;width:100%;height:100%}
 
-    .hud {
-      position: absolute;
-      left: 16px;
-      top: 16px;
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      padding: 10px 12px;
-      border-radius: 14px;
+    .hud{
+      position:absolute;left:16px;top:16px;
+      display:flex;gap:10px;align-items:center;
+      padding:10px 12px;border-radius:14px;
       background: linear-gradient(180deg, var(--panel), rgba(255,255,255,.04));
-      border: 1px solid rgba(255,255,255,.10);
+      border:1px solid rgba(255,255,255,.10);
       backdrop-filter: blur(10px);
-      box-shadow: 0 10px 30px rgba(0,0,0,.35);
-      user-select: none;
+      box-shadow:0 10px 30px rgba(0,0,0,.35);
+      user-select:none;
     }
-    .badge {
-      padding: 6px 10px;
-      border-radius: 999px;
+    .badge{
+      padding:6px 10px;border-radius:999px;
       background: rgba(124,247,255,.12);
-      border: 1px solid rgba(124,247,255,.25);
-      color: var(--accent);
-      font-weight: 700;
-      font-size: 12px;
+      border:1px solid rgba(124,247,255,.25);
+      color:var(--accent);
+      font-weight:800;
+      font-size:12px;
+      letter-spacing:.2px;
     }
-    .title { display:flex; flex-direction:column; gap:2px; min-width: 220px; }
-    .title b { font-size: 13px; }
-    .title span { font-size: 12px; color: var(--muted); }
-
-    .btns { display:flex; gap:8px; }
-    button {
-      appearance: none;
-      border: 1px solid rgba(255,255,255,.14);
+    .title{display:flex;flex-direction:column;gap:2px;min-width:240px}
+    .title b{font-size:13px}
+    .title span{font-size:12px;color:var(--muted)}
+    .btns{display:flex;gap:8px}
+    button{
+      appearance:none;
+      border:1px solid rgba(255,255,255,.14);
       background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.06));
-      color: var(--text);
-      padding: 8px 10px;
-      border-radius: 12px;
-      cursor: pointer;
-      font-weight: 700;
-      font-size: 12px;
+      color:var(--text);
+      padding:8px 10px;
+      border-radius:12px;
+      cursor:pointer;
+      font-weight:800;
+      font-size:12px;
       transition: transform .08s ease, border-color .2s ease;
     }
-    button:hover { border-color: rgba(124,247,255,.35); }
-    button:active { transform: translateY(1px) scale(.99); }
-    .danger { border-color: rgba(255,107,139,.35); }
-    .danger:hover { border-color: rgba(255,107,139,.55); }
+    button:hover{border-color: rgba(124,247,255,.35)}
+    button:active{transform: translateY(1px) scale(.99)}
+    .danger{border-color: rgba(255,107,139,.35)}
+    .danger:hover{border-color: rgba(255,107,139,.55)}
 
-    .tip {
-      position: absolute;
-      right: 16px;
-      top: 16px;
-      max-width: 360px;
-      padding: 12px 14px;
-      border-radius: 14px;
+    .tip{
+      position:absolute;right:16px;top:16px;
+      max-width:380px;
+      padding:12px 14px;border-radius:14px;
       background: linear-gradient(180deg, var(--panel), rgba(255,255,255,.04));
-      border: 1px solid rgba(255,255,255,.10);
+      border:1px solid rgba(255,255,255,.10);
       backdrop-filter: blur(10px);
-      box-shadow: 0 10px 30px rgba(0,0,0,.35);
-      font-size: 12px;
-      color: var(--muted);
-      user-select: none;
+      box-shadow:0 10px 30px rgba(0,0,0,.35);
+      font-size:12px;color:var(--muted);
+      user-select:none;
     }
-    .tip b { color: var(--text); }
+    .tip b{color:var(--text)}
+    .hint{
+      position:absolute;left:16px;bottom:16px;
+      padding:10px 12px;border-radius:14px;
+      background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03));
+      border:1px solid rgba(255,255,255,.10);
+      backdrop-filter: blur(10px);
+      box-shadow:0 10px 30px rgba(0,0,0,.35);
+      font-size:12px;color:var(--muted);
+      user-select:none;
+      display:flex;gap:10px;align-items:center;
+    }
+    .dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.35)}
+    .dot.ok{background:var(--ok)}
+    .dot.bad{background:var(--danger)}
+
+    .loader{
+      position:absolute;inset:0;
+      display:flex;align-items:center;justify-content:center;
+      background: rgba(0,0,0,.35);
+      backdrop-filter: blur(6px);
+      z-index: 50;
+    }
+    .loaderCard{
+      width:min(520px, 92vw);
+      border-radius:18px;
+      border:1px solid rgba(255,255,255,.12);
+      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05));
+      box-shadow:0 20px 60px rgba(0,0,0,.45);
+      padding:16px;
+      user-select:none;
+    }
+    .loaderTitle{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+    .loaderTitle b{font-size:14px}
+    .bar{
+      height:10px;border-radius:999px;
+      background: rgba(255,255,255,.10);
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.10);
+    }
+    .bar > div{
+      height:100%;
+      width:0%;
+      background: linear-gradient(90deg, rgba(124,247,255,.7), rgba(255,107,139,.65));
+      border-radius:999px;
+      transition: width .2s ease;
+    }
+    .loaderText{margin-top:10px;font-size:12px;color:var(--muted);line-height:1.35}
+    code{background: rgba(255,255,255,.08); padding:2px 6px; border-radius:8px}
   </style>
 </head>
 <body>
@@ -104,7 +143,29 @@
 
   <div class="tip">
     <b>Цель:</b> развали офисный домик и сбей “наушников”.<br/>
-    <b>Фишка:</b> когда ты не трогаешь персонажа — он <b>качает стул</b>.
+    <b>Фишка:</b> когда ты не трогаешь персонажа — он слегка <b>качает стул</b>.
+  </div>
+
+  <div class="hint" id="assetHint">
+    <span class="dot" id="assetDot"></span>
+    <span id="assetHintText">Загрузка ассетов…</span>
+  </div>
+
+  <div class="loader" id="loader">
+    <div class="loaderCard">
+      <div class="loaderTitle">
+        <b>Грузим офисный цирк…</b>
+        <span id="loaderPct" style="color:var(--muted);font-size:12px">0%</span>
+      </div>
+      <div class="bar"><div id="loaderBar"></div></div>
+      <div class="loaderText" id="loaderText">
+        Если застрянет на 0% — проверь, что файлы лежат по путям:
+        <br/>
+        <code>assets/player/chair.png</code>,
+        <code>assets/player/human_idle.png</code>,
+        <code>assets/player/human_fly.png</code>
+      </div>
+    </div>
   </div>
 
   <canvas id="c"></canvas>
@@ -119,7 +180,81 @@
   } = Matter;
 
   const canvas = document.getElementById('c');
+  const loaderEl = document.getElementById('loader');
+  const loaderBar = document.getElementById('loaderBar');
+  const loaderPct = document.getElementById('loaderPct');
+  const loaderText = document.getElementById('loaderText');
 
+  const assetDot = document.getElementById('assetDot');
+  const assetHintText = document.getElementById('assetHintText');
+
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- ASSETS ----------
+  const IMG = {
+    chair: null,
+    humanIdle: null,
+    humanFly: null
+  };
+
+  function loadImage(src, onProgress) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error(`Не могу загрузить: ${src}`));
+      img.src = src;
+      if (onProgress) onProgress(src);
+    });
+  }
+
+  async function loadAllAssets() {
+    const list = [
+      { key: "chair", src: "assets/player/chair.png" },
+      { key: "humanIdle", src: "assets/player/human_idle.png" },
+      { key: "humanFly", src: "assets/player/human_fly.png" },
+    ];
+
+    let loaded = 0;
+    const total = list.length;
+
+    function setProgress(extraText) {
+      const pct = Math.round((loaded / total) * 100);
+      loaderBar.style.width = pct + "%";
+      loaderPct.textContent = pct + "%";
+      if (extraText) loaderText.textContent = extraText;
+    }
+
+    setProgress();
+
+    for (const item of list) {
+      const img = await loadImage(item.src);
+      IMG[item.key] = img;
+      loaded++;
+      setProgress();
+    }
+
+    // quick sanity
+    if (!IMG.chair || !IMG.humanIdle || !IMG.humanFly) {
+      throw new Error("Ассеты не загрузились полностью.");
+    }
+  }
+
+  function showAssetsOk() {
+    assetDot.classList.add('ok');
+    assetHintText.textContent = 'Ассеты подключены ✅';
+  }
+
+  function showAssetsBad(msg) {
+    assetDot.classList.add('bad');
+    assetHintText.textContent = 'Ассеты НЕ загрузились ❯োগибка';
+    loaderText.textContent =
+      msg + "\n\nПроверь:\n" +
+      "1) папки/имена в репо (регистр важен)\n" +
+      "2) пути: assets/player/chair.png, human_idle.png, human_fly.png\n" +
+      "3) что GitHub Pages действительно обновился (иногда кеш)";
+  }
+
+  // ---------- ENGINE ----------
   const engine = Engine.create();
   engine.gravity.y = 1.05;
 
@@ -139,21 +274,16 @@
   Runner.run(runner, engine);
   Render.run(render);
 
-  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-
-  function resize() {
+  function resizeCanvas() {
     render.options.width = window.innerWidth;
     render.options.height = window.innerHeight;
-    render.canvas.width = Math.floor(window.innerWidth * render.options.pixelRatio);
-    render.canvas.height = Math.floor(window.innerHeight * render.options.pixelRatio);
+    const pr = render.options.pixelRatio;
+
+    render.canvas.width = Math.floor(window.innerWidth * pr);
+    render.canvas.height = Math.floor(window.innerHeight * pr);
     render.canvas.style.width = window.innerWidth + 'px';
     render.canvas.style.height = window.innerHeight + 'px';
   }
-
-  window.addEventListener('resize', () => {
-    resize();
-    buildLevel();
-  });
 
   function roundRect(ctx, x, y, w, h, r){
     const rr = Math.min(r, w/2, h/2);
@@ -238,71 +368,22 @@
     ctx.restore();
   }
 
-  function drawProjectile(ctx, body, mouseConstraint) {
-    const p = body.position;
-    const isDragging = mouseConstraint && mouseConstraint.body === body;
-
+  function drawImageOnBody(ctx, body, img, w, h, ox=0, oy=0) {
+    if (!img) return;
     ctx.save();
-    ctx.translate(p.x, p.y);
+    ctx.translate(body.position.x, body.position.y);
     ctx.rotate(body.angle);
-
-    ctx.globalAlpha = 0.25;
-    ctx.fillStyle = '#000';
-    ctx.beginPath();
-    ctx.ellipse(8, 34, 34, 14, 0, 0, Math.PI*2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-
-    ctx.fillStyle = 'rgba(255,255,255,0.12)';
-    roundRect(ctx, -24, 26, 68, 10, 6); ctx.fill();
-
-    ctx.fillStyle = 'rgba(124,247,255,0.55)';
-    for (let i=0;i<4;i++){
-      ctx.beginPath();
-      ctx.arc(-16 + i*18, 36, 4, 0, Math.PI*2);
-      ctx.fill();
-    }
-
-    ctx.fillStyle = 'rgba(255,255,255,0.16)';
-    roundRect(ctx, -10, 8, 44, 18, 8); ctx.fill();
-
-    ctx.fillStyle = 'rgba(255,255,255,0.14)';
-    roundRect(ctx, 18, -16, 14, 28, 7); ctx.fill();
-
-    ctx.fillStyle = 'rgba(255,255,255,0.70)';
-    roundRect(ctx, -8, -8, 18, 18, 7); ctx.fill();
-
-    ctx.fillStyle = 'rgba(255,255,255,0.92)';
-    ctx.beginPath();
-    ctx.arc(0, -18, 10, 0, Math.PI*2);
-    ctx.fill();
-
-    ctx.fillStyle = 'rgba(255,107,139,0.9)';
-    ctx.beginPath();
-    ctx.moveTo(2, 2);
-    ctx.lineTo(10, 10);
-    ctx.lineTo(2, 14);
-    ctx.closePath();
-    ctx.fill();
-
-    if (isDragging) {
-      ctx.globalAlpha = 0.9;
-      ctx.strokeStyle = 'rgba(124,247,255,0.9)';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(0, 0, 46, 0, Math.PI*2);
-      ctx.stroke();
-    }
-
+    ctx.drawImage(img, -w/2 + ox, -h/2 + oy, w, h);
     ctx.restore();
   }
 
-  // Scene vars
+  // ---------- WORLD ----------
   let ground, leftWall, rightWall;
   let slingAnchor, slingConstraint, projectile;
   let mouseConstraint;
   let officeBlocks = [];
   let officePeople = [];
+  let hasLaunched = false;
 
   function clearWorld() {
     Composite.clear(engine.world, false);
@@ -311,6 +392,7 @@
     ground = leftWall = rightWall = null;
     slingAnchor = slingConstraint = projectile = null;
     mouseConstraint = null;
+    hasLaunched = false;
   }
 
   function buildLevel() {
@@ -325,12 +407,10 @@
     });
     leftWall = Bodies.rectangle(-60, H/2, 120, H+200, { isStatic: true, render: { visible:false }});
     rightWall = Bodies.rectangle(W+60, H/2, 120, H+200, { isStatic: true, render: { visible:false }});
-
     Composite.add(engine.world, [ground, leftWall, rightWall]);
 
     const slingX = W * 0.18;
     const slingY = H * 0.62;
-
     slingAnchor = { x: slingX, y: slingY };
 
     projectile = Bodies.circle(slingX + 40, slingY - 10, 26, {
@@ -421,29 +501,26 @@
     });
     Composite.add(engine.world, mouseConstraint);
 
+    // prevent mobile scroll
     render.canvas.addEventListener('touchstart', e => e.preventDefault(), { passive:false });
     render.canvas.addEventListener('touchmove', e => e.preventDefault(), { passive:false });
 
-    // ---------- FIX: launch direction ----------
-    let hasLaunched = false;
-
+    // --- FIX: launch direction = "куда натянул — туда полетел"
     Events.off(mouseConstraint, 'enddrag');
     Events.on(mouseConstraint, 'enddrag', (evt) => {
       if (evt.body !== projectile) return;
       if (!slingConstraint.bodyB) return;
 
-      const stretchVec = Vector.sub(projectile.position, slingAnchor); // <-- ВАЖНО: projectile - anchor
+      const stretchVec = Vector.sub(projectile.position, slingAnchor); // projectile - anchor
       const d = Vector.magnitude(stretchVec);
 
-      // запускаем только если реально натянули
       if (d > 35) {
-        slingConstraint.bodyB = null;
+        slingConstraint.bodyB = null; // release
         hasLaunched = true;
 
-        // сила зависит от натяжения
-        const dir = Vector.normalise(stretchVec); // <-- летим туда, куда тянули
-        const power = clamp(d / 220, 0, 1);       // 0..1
-        const forceMag = 0.018 + power * 0.030;   // подстройка "ощущения"
+        const dir = Vector.normalise(stretchVec);
+        const power = clamp(d / 220, 0, 1);
+        const forceMag = 0.018 + power * 0.030;
         Body.applyForce(projectile, projectile.position, Vector.mult(dir, forceMag));
       }
     });
@@ -455,14 +532,18 @@
 
       const dragging = mouseConstraint.body === projectile;
 
+      // idle качание, пока не трогаем и не запускали
       if (slingConstraint.bodyB && !dragging) {
         const t = engine.timing.timestamp * 0.002;
         Body.setAngularVelocity(projectile, Math.sin(t) * 0.02);
 
-        const toHome = Vector.sub({x: slingAnchor.x + 40, y: slingAnchor.y - 10}, projectile.position);
+        // подтягиваем к "домашней" позиции
+        const home = { x: slingAnchor.x + 40, y: slingAnchor.y - 10 };
+        const toHome = Vector.sub(home, projectile.position);
         Body.applyForce(projectile, projectile.position, Vector.mult(toHome, 0.00003));
       }
 
+      // ограничение натяжения
       if (dragging && slingConstraint.bodyB) {
         const v = Vector.sub(projectile.position, slingAnchor);
         const mag = Vector.magnitude(v);
@@ -473,69 +554,113 @@
       }
     });
 
-    // win check (optional)
-    let won = false;
-    Events.on(engine, 'afterUpdate', () => {
-      if (won || !hasLaunched) return;
-      const downCount = officePeople.filter(p => p.position.y > (H * 0.82)).length;
-      if (downCount >= officePeople.length) won = true;
-    });
-
-    // custom render
-    Events.off(render, 'beforeRender');
-    Events.off(render, 'afterRender');
-
-    Events.on(render, 'beforeRender', () => {
-      const ctx = render.context;
-      ctx.setTransform(1,0,0,1,0,0);
-      ctx.clearRect(0,0,render.canvas.width, render.canvas.height);
-
-      const pr = render.options.pixelRatio;
-      ctx.scale(pr, pr);
-      drawBackground(ctx);
-    });
-
-    Events.on(render, 'afterRender', () => {
-      const ctx = render.context;
-      const pr = render.options.pixelRatio;
-      ctx.save();
-      ctx.setTransform(pr,0,0,pr,0,0);
-
-      // sling post
-      ctx.save();
-      ctx.translate(slingAnchor.x, slingAnchor.y);
-      ctx.fillStyle = 'rgba(255,255,255,0.10)';
-      roundRect(ctx, -14, -40, 28, 120, 12); ctx.fill();
-      ctx.fillStyle = 'rgba(124,247,255,0.20)';
-      roundRect(ctx, -10, -36, 20, 36, 10); ctx.fill();
-      ctx.restore();
-
-      // band line
-      if (projectile && slingConstraint && slingConstraint.bodyB) {
-        const a = slingAnchor;
-        const b = projectile.position;
-        ctx.strokeStyle = 'rgba(255,107,139,0.75)';
-        ctx.lineWidth = 6;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.stroke();
-      }
-
-      for (const p of officePeople) drawOfficePerson(ctx, p);
-      if (projectile) drawProjectile(ctx, projectile, mouseConstraint);
-
-      ctx.restore();
-    });
-
-    resize();
+    resizeCanvas();
   }
 
-  document.getElementById('resetBtn').addEventListener('click', () => buildLevel());
-  document.getElementById('nextBtn').addEventListener('click', () => { /* заглушка */ });
+  // ---------- CUSTOM RENDER ----------
+  Events.off(render, 'beforeRender');
+  Events.off(render, 'afterRender');
 
-  buildLevel();
+  Events.on(render, 'beforeRender', () => {
+    const ctx = render.context;
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,render.canvas.width, render.canvas.height);
+
+    const pr = render.options.pixelRatio;
+    ctx.scale(pr, pr);
+    drawBackground(ctx);
+  });
+
+  Events.on(render, 'afterRender', () => {
+    if (!projectile) return;
+
+    const ctx = render.context;
+    const pr = render.options.pixelRatio;
+
+    ctx.save();
+    ctx.setTransform(pr,0,0,pr,0,0);
+
+    // sling post
+    ctx.save();
+    ctx.translate(slingAnchor.x, slingAnchor.y);
+    ctx.fillStyle = 'rgba(255,255,255,0.10)';
+    roundRect(ctx, -14, -40, 28, 120, 12); ctx.fill();
+    ctx.fillStyle = 'rgba(124,247,255,0.20)';
+    roundRect(ctx, -10, -36, 20, 36, 10); ctx.fill();
+    ctx.restore();
+
+    // band line
+    if (slingConstraint && slingConstraint.bodyB) {
+      const a = slingAnchor;
+      const b = projectile.position;
+      ctx.strokeStyle = 'rgba(255,107,139,0.75)';
+      ctx.lineWidth = 6;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+
+    // NPC
+    for (const p of officePeople) drawOfficePerson(ctx, p);
+
+    // --- DRAW PLAYER (PNG) ---
+    const isFlying = !(slingConstraint && slingConstraint.bodyB);
+
+    // размеры/смещения под твои PNG (можно потом подстроить)
+    // стул (чуть ниже)
+    drawImageOnBody(ctx, projectile, IMG.chair, 160, 160, 0, 25);
+
+    // человек
+    const humanImg = isFlying ? IMG.humanFly : IMG.humanIdle;
+    if (isFlying) {
+      // летящий чуть впереди и выше
+      drawImageOnBody(ctx, projectile, humanImg, 170, 170, 35, -35);
+    } else {
+      // сидящий ровно на стуле
+      drawImageOnBody(ctx, projectile, humanImg, 180, 180, 20, -35);
+    }
+
+    ctx.restore();
+  });
+
+  // ---------- UI ----------
+  document.getElementById('resetBtn').addEventListener('click', () => buildLevel());
+  document.getElementById('nextBtn').addEventListener('click', () => { /* заглушка под уровни */ });
+
+  window.addEventListener('resize', () => {
+    resizeCanvas();
+    buildLevel();
+  });
+
+  // ---------- START ----------
+  (async () => {
+    try {
+      assetDot.classList.remove('ok','bad');
+      assetHintText.textContent = 'Загрузка ассетов…';
+      loaderEl.style.display = 'flex';
+
+      await loadAllAssets();
+
+      loaderBar.style.width = '100%';
+      loaderPct.textContent = '100%';
+      loaderText.textContent = 'Готово! Запускаю уровень…';
+
+      showAssetsOk();
+
+      // небольшая пауза, чтобы пользователь видел 100%
+      setTimeout(() => {
+        loaderEl.style.display = 'none';
+        buildLevel();
+      }, 250);
+
+    } catch (e) {
+      console.error(e);
+      showAssetsBad(String(e && e.message ? e.message : e));
+      loaderEl.style.display = 'flex';
+    }
+  })();
 })();
 </script>
 </body>
