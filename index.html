@@ -2,818 +2,786 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Office Birds — MVP</title>
-
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      overflow: hidden;
-      background: radial-gradient(1200px 800px at 20% 20%, #1f79c7 0%, #0b1a2c 60%, #060c14 100%);
+    html, body { margin:0; padding:0; height:100%; overflow:hidden; }
+    body{
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      user-select: none;
-    }
-
-    #wrap {
-      position: relative;
-      width: 100vw;
-      height: 100vh;
-    }
-
-    /* Canvas */
-    canvas {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
-
-    /* Background image layer (optional) */
-    #bg {
-      position: absolute;
-      inset: 0;
+      background: #0b1320;
+      /* ✅ фон грузим CSS'ом, не через Matter.Render.background */
+      background-image: url("assets/bg_office.png");
       background-size: cover;
-      background-position: center;
+      background-position: center bottom;
       background-repeat: no-repeat;
-      filter: saturate(1.05) contrast(1.03);
-      opacity: 1;
-      z-index: 0;
     }
+    canvas{ display:block; }
 
-    #hud-left, #hud-right {
-      position: absolute;
-      top: 12px;
-      z-index: 5;
-      display: flex;
-      gap: 10px;
-      align-items: flex-start;
-      pointer-events: none;
+    .hud{
+      position:fixed; left:16px; top:12px; z-index:10;
+      display:flex; gap:10px; align-items:flex-start;
+      pointer-events:none;
     }
-
-    #hud-left { left: 12px; }
-    #hud-right { right: 12px; }
-
-    .panel {
-      pointer-events: auto;
-      background: rgba(10, 20, 35, 0.62);
-      border: 1px solid rgba(255,255,255,0.12);
-      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    .panel{
+      pointer-events:none;
+      background: rgba(8,14,22,.55);
+      border: 1px solid rgba(255,255,255,.12);
       border-radius: 10px;
-      color: #eaf2ff;
       padding: 10px 12px;
-      min-width: 250px;
-      backdrop-filter: blur(8px);
-    }
-
-    .panel h3 {
-      margin: 0 0 6px 0;
-      font-size: 14px;
-      font-weight: 800;
-      letter-spacing: 0.2px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 11px;
-      font-weight: 800;
-      padding: 4px 8px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.12);
-      border: 1px solid rgba(255,255,255,0.14);
-    }
-
-    .panel p {
-      margin: 6px 0 0 0;
-      font-size: 12px;
-      line-height: 1.35;
-      opacity: 0.95;
-    }
-
-    .btn {
-      pointer-events: auto;
-      appearance: none;
-      border: 1px solid rgba(255,255,255,0.16);
-      background: rgba(30, 120, 255, 0.18);
-      color: #eaf2ff;
-      border-radius: 10px;
-      padding: 8px 10px;
-      font-weight: 800;
-      cursor: pointer;
-      transition: transform .08s ease, background .15s ease;
-      box-shadow: 0 10px 24px rgba(0,0,0,0.22);
-    }
-    .btn:hover { background: rgba(30, 120, 255, 0.28); }
-    .btn:active { transform: translateY(1px) scale(0.99); }
-
-    /* Score */
-    .kv {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 6px 10px;
-      margin-top: 8px;
-      font-size: 12px;
-    }
-    .kv b { font-weight: 900; }
-
-    /* Footer hint */
-    #hint {
-      position: absolute;
-      left: 50%;
-      transform: translateX(-50%);
-      bottom: 12px;
-      z-index: 5;
-      padding: 8px 12px;
-      border-radius: 999px;
-      background: rgba(10, 20, 35, 0.45);
-      border: 1px solid rgba(255,255,255,0.10);
-      color: rgba(234,242,255,0.92);
-      font-size: 12px;
+      color: rgba(255,255,255,.92);
+      box-shadow: 0 10px 30px rgba(0,0,0,.35);
       backdrop-filter: blur(6px);
-      pointer-events: none;
+      -webkit-backdrop-filter: blur(6px);
+      max-width: 360px;
+    }
+    .titleRow{
+      display:flex; align-items:center; gap:10px; margin-bottom:6px;
+      font-weight:700;
+    }
+    .badge{
+      font-size:12px; font-weight:800;
+      padding:4px 8px; border-radius:999px;
+      background: rgba(255,255,255,.10);
+      border: 1px solid rgba(255,255,255,.14);
+    }
+    .btn{
+      pointer-events:auto;
+      cursor:pointer;
+      border: 1px solid rgba(255,255,255,.18);
+      background: rgba(255,255,255,.10);
+      color: rgba(255,255,255,.92);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-weight:700;
+      user-select:none;
+    }
+    .btn:hover{ background: rgba(255,255,255,.16); }
+    .small{ font-size:12px; line-height:1.35; opacity:.92; }
+    .statsRow{ display:flex; gap:12px; margin-top:6px; flex-wrap:wrap; }
+    .kv{ font-size:12px; opacity:.9; }
+    .kv b{ font-size:13px; opacity:1; }
+
+    .hudRight{
+      position:fixed; right:16px; top:12px; z-index:10;
+      display:flex; gap:10px; align-items:flex-start;
+      pointer-events:none;
+    }
+    .hint{
+      position:fixed;
+      left:50%; bottom:10px; transform:translateX(-50%);
+      z-index:10;
+      background: rgba(0,0,0,.42);
+      color: rgba(255,255,255,.85);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 10px;
+      padding: 6px 10px;
+      font-size: 12px;
+      pointer-events:none;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
     }
   </style>
 </head>
 <body>
-  <div id="wrap">
-    <div id="bg"></div>
-    <canvas id="c"></canvas>
-
-    <div id="hud-left">
-      <div class="panel">
-        <h3><span class="badge">LEVEL 1</span> Office Birds</h3>
-        <p>
-          Зажми человечка → потяни назад → отпусти.<br>
-          Чем сильнее натяжка, тем дальше полёт.
-        </p>
-
-        <div class="kv">
-          <span>Счёт:</span> <b id="score">0</b>
-          <span>Сломано элементов:</span> <b id="broken">0</b>
-          <span>Попытка:</span> <b id="shots">0</b>
-        </div>
+  <div class="hud">
+    <div class="panel">
+      <div class="titleRow">
+        <span class="badge">LEVEL 1</span>
+        <span>Office Birds</span>
+      </div>
+      <div class="small">
+        Зажми на человечке → потяни назад → отпусти.<br/>
+        Чем сильнее натяжка, тем дальше полёт.
       </div>
 
-      <button class="btn" id="resetBtn">Reset (всё заново)</button>
-    </div>
-
-    <div id="hud-right">
-      <div class="panel">
-        <h3>Цель</h3>
-        <p>
-          Развали офисный домик (2 этажа).<br>
-          Внутри сидят менеджеры в наушниках.<br>
-          После выстрела: 2–3 сек разрушения → авто-респавн.<br>
-          Домик НЕ восстанавливается (остаётся поломанным).
-        </p>
-        <div class="kv">
-          <span>Статус:</span> <b id="status">Готов</b>
-        </div>
+      <div class="statsRow">
+        <div class="kv">Счёт: <b id="score">0</b></div>
+        <div class="kv">Сломано балок: <b id="broken">0</b></div>
+        <div class="kv">Попыток: <b id="shots">0</b></div>
       </div>
     </div>
 
-    <div id="hint">Если фон не грузится — проверь путь к bg_office.png (код сам подхватит запасной вариант).</div>
+    <button class="btn" id="resetBtn">Reset (всё заново)</button>
   </div>
 
-  <!-- Matter.js -->
+  <div class="hudRight">
+    <div class="panel" style="max-width:380px;">
+      <div style="font-weight:800; margin-bottom:6px;">Цель</div>
+      <div class="small">
+        Развали офисный домик (2 этажа).<br/>
+        Внутри сидят менеджеры в наушниках.<br/>
+        После выстрела идёт 2–3 сек разрушения → авто-ресpawn.<br/>
+        Домик не восстанавливается (остаётся поломанным).
+      </div>
+      <div class="small" style="margin-top:6px;">
+        Статус: <b id="status">Готов</b>
+      </div>
+    </div>
+  </div>
+
+  <div class="hint" id="hint">Если что-то “пропало” — проверь, что PNG лежат как в путях: assets/office/* и assets/player/*</div>
+
   <script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
-
   <script>
-    /********************
-     *  ASSET PATHS
-     ********************/
-    const ASSETS = {
-      bgPrimary: "assets/bg_office.png",
-      bgFallback: "assets/office/bg_office.png",
+    (() => {
+      const {
+        Engine, Render, Runner, World, Bodies, Body, Composite, Composites,
+        Constraint, Mouse, MouseConstraint, Events, Sleeping, Vector
+      } = Matter;
 
-      beam: "assets/office/beam.png",
-      pillar: "assets/office/pillar.png",
-      manager: "assets/office/manager.png",
+      // =========================
+      // ✅ ПУТИ (под твой репо-дерево)
+      // =========================
+      const ASSETS = {
+        beam:   "assets/office/beam.png",
+        pillar: "assets/office/pillar.png",
+        manager:"assets/office/manager.png",
+        birdIdle:"assets/player/human_idle.png",
+        birdFly:"assets/player/human_fly.png"
+      };
 
-      humanIdle: "assets/player/human_idle.png",
-      humanFly: "assets/player/human_fly.png"
-    };
+      // =========================
+      // UI
+      // =========================
+      const $score = document.getElementById("score");
+      const $broken = document.getElementById("broken");
+      const $shots = document.getElementById("shots");
+      const $status = document.getElementById("status");
+      const resetBtn = document.getElementById("resetBtn");
 
-    /********************
-     *  UTIL: load image
-     ********************/
-    function loadImage(src) {
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => resolve({ ok: true, img, src });
-        img.onerror = () => resolve({ ok: false, img: null, src });
-        img.src = src + (src.includes("?") ? "&" : "?") + "v=" + Date.now();
-      });
-    }
+      let score = 0;
+      let brokenBeams = 0;
+      let shots = 0;
 
-    function setStatus(txt) {
-      document.getElementById("status").textContent = txt;
-    }
+      function setStatus(t){ $status.textContent = t; }
 
-    /********************
-     *  MAIN
-     ********************/
-    (async function main() {
-      // Background (optional): try primary -> fallback -> none (gradient stays)
-      const bgEl = document.getElementById("bg");
-      const bg1 = await loadImage(ASSETS.bgPrimary);
-      if (bg1.ok) {
-        bgEl.style.backgroundImage = `url('${ASSETS.bgPrimary}')`;
-      } else {
-        const bg2 = await loadImage(ASSETS.bgFallback);
-        if (bg2.ok) {
-          bgEl.style.backgroundImage = `url('${ASSETS.bgFallback}')`;
+      // =========================
+      // Helpers: load images + fallback
+      // =========================
+      function loadImage(src){
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => resolve(null);
+          img.src = src + "?v=" + Date.now(); // cache-bust
+        });
+      }
+
+      function spriteOrFallback(body, img, w, h, fallbackColor){
+        if (img) {
+          body.render.sprite = {
+            texture: img.src,
+            xScale: w / (img.naturalWidth || w),
+            yScale: h / (img.naturalHeight || h)
+          };
+          body.render.fillStyle = "transparent";
         } else {
-          // leave gradient only
-          console.warn("BG not loaded from:", ASSETS.bgPrimary, "or", ASSETS.bgFallback);
+          body.render.fillStyle = fallbackColor;
+          body.render.strokeStyle = "rgba(255,255,255,0.25)";
+          body.render.lineWidth = 2;
         }
       }
 
-      // Preload gameplay sprites (not fatal if missing)
-      const [beamImg, pillarImg, managerImg, idleImg, flyImg] = await Promise.all([
-        loadImage(ASSETS.beam),
-        loadImage(ASSETS.pillar),
-        loadImage(ASSETS.manager),
-        loadImage(ASSETS.humanIdle),
-        loadImage(ASSETS.humanFly)
-      ]);
+      // =========================
+      // Engine / Render
+      // =========================
+      const engine = Engine.create();
+      engine.world.gravity.y = 1.0; // ✅ вниз
+      engine.world.gravity.x = 0;
 
-      const SPR = {
-        beam: beamImg.ok ? beamImg.img : null,
-        pillar: pillarImg.ok ? pillarImg.img : null,
-        manager: managerImg.ok ? managerImg.img : null,
-        humanIdle: idleImg.ok ? idleImg.img : null,
-        humanFly: flyImg.ok ? flyImg.img : null
-      };
-
-      /********************
-       *  Matter setup
-       ********************/
-      const {
-        Engine, Render, Runner, Bodies, Body, Composite, Composites,
-        Constraint, Mouse, MouseConstraint, Events, Vector
-      } = Matter;
-
-      const canvas = document.getElementById("c");
-
-      const engine = Engine.create({
-        gravity: { x: 0, y: 1.0 }
-      });
-
-      const world = engine.world;
+      const W = () => window.innerWidth;
+      const H = () => window.innerHeight;
 
       const render = Render.create({
-        canvas,
+        element: document.body,
         engine,
         options: {
-          width: window.innerWidth,
-          height: window.innerHeight,
+          width: W(),
+          height: H(),
           wireframes: false,
           background: "transparent",
-          pixelRatio: Math.min(window.devicePixelRatio || 1, 2)
+          pixelRatio: Math.min(2, window.devicePixelRatio || 1)
         }
       });
 
       Render.run(render);
-
       const runner = Runner.create();
       Runner.run(runner, engine);
 
-      // Resize
-      function onResize() {
-        render.options.width = window.innerWidth;
-        render.options.height = window.innerHeight;
-        render.canvas.width = window.innerWidth * render.options.pixelRatio;
-        render.canvas.height = window.innerHeight * render.options.pixelRatio;
-        Render.setPixelRatio(render, render.options.pixelRatio);
+      window.addEventListener("resize", () => {
+        render.canvas.width = W() * render.options.pixelRatio;
+        render.canvas.height = H() * render.options.pixelRatio;
+        render.options.width = W();
+        render.options.height = H();
+        Render.lookAt(render, {
+          min: { x: 0, y: 0 },
+          max: { x: W(), y: H() }
+        });
+      });
 
-        // move ground to bottom
-        Body.setPosition(ground, { x: window.innerWidth / 2, y: window.innerHeight - groundThickness/2 });
-        Body.setVertices(ground, Bodies.rectangle(window.innerWidth/2, window.innerHeight - groundThickness/2, window.innerWidth + 200, groundThickness, { isStatic: true }).vertices);
-      }
-      window.addEventListener("resize", onResize);
-
-      /********************
-       *  Ground (visible)
-       ********************/
-      const groundThickness = 80;
-      const ground = Bodies.rectangle(
-        window.innerWidth / 2,
-        window.innerHeight - groundThickness/2,
-        window.innerWidth + 200,
-        groundThickness,
-        {
+      // =========================
+      // World bounds / floor
+      // =========================
+      function makeFloor(){
+        // четкий пол
+        const floorH = Math.max(40, Math.floor(H()*0.06));
+        const floor = Bodies.rectangle(W()/2, H()-floorH/2, W(), floorH, {
           isStatic: true,
-          friction: 1.0,
-          restitution: 0.0,
+          friction: 1,
+          restitution: 0,
           render: {
-            fillStyle: "rgba(0,0,0,0.25)",
-            strokeStyle: "rgba(255,255,255,0.10)",
-            lineWidth: 2
+            fillStyle: "rgba(0,0,0,0.20)"
           }
-        }
-      );
+        });
 
-      // A visible floor line / glossy strip
-      const floorLine = Bodies.rectangle(
-        window.innerWidth / 2,
-        window.innerHeight - groundThickness,
-        window.innerWidth + 200,
-        6,
-        {
-          isStatic: true,
-          isSensor: true,
-          render: {
-            fillStyle: "rgba(255,255,255,0.18)"
-          }
-        }
-      );
+        // стены, чтобы ничего не улетало бесконечно
+        const wallT = 80;
+        const leftWall = Bodies.rectangle(-wallT/2, H()/2, wallT, H()*2, { isStatic:true, render:{visible:false} });
+        const rightWall = Bodies.rectangle(W()+wallT/2, H()/2, wallT, H()*2, { isStatic:true, render:{visible:false} });
+        const topWall = Bodies.rectangle(W()/2, -wallT/2, W()*2, wallT, { isStatic:true, render:{visible:false} });
 
-      Composite.add(world, [ground, floorLine]);
-
-      /********************
-       *  Helpers: sprite bodies
-       ********************/
-      function makeSpriteRect(x, y, w, h, options, spriteImg) {
-        const body = Bodies.rectangle(x, y, w, h, options);
-        if (spriteImg) {
-          body.render.sprite = {
-            texture: spriteImg.src,
-            xScale: w / spriteImg.naturalWidth,
-            yScale: h / spriteImg.naturalHeight
-          };
-          body.render.fillStyle = "transparent";
-        }
-        return body;
+        World.add(engine.world, [floor, leftWall, rightWall, topWall]);
+        return floor;
       }
 
-      // “damage/break” system
-      let score = 0;
-      let brokenCount = 0;
+      let floorBody = makeFloor();
 
-      function addScore(delta) {
-        score += delta;
-        document.getElementById("score").textContent = String(score);
-      }
-      function addBroken(n=1) {
-        brokenCount += n;
-        document.getElementById("broken").textContent = String(brokenCount);
-      }
-
-      function tagBreakable(body, hp, points) {
-        body.plugin = body.plugin || {};
-        body.plugin.breakable = { hp, points, broken: false };
-        return body;
-      }
-
-      function breakBody(body) {
-        if (!body || !body.plugin || !body.plugin.breakable) return;
-        const b = body.plugin.breakable;
-        if (b.broken) return;
-        b.broken = true;
-
-        // remove body
-        Composite.remove(world, body);
-        addBroken(1);
-        addScore(b.points || 10);
-      }
-
-      /********************
-       *  Build House (2 floors)
-       *  Layout: 2 pillars on sides, beams top/mid/bottom, managers inside
-       ********************/
-      let structure = [];
-      let managers = [];
-      let structureFrozen = true; // to avoid initial collapse
-
-      function clearWorldDynamic() {
-        // remove all bodies except ground/floorLine
-        const all = Composite.allBodies(world);
-        for (const b of all) {
-          if (b === ground || b === floorLine) continue;
-          Composite.remove(world, b);
-        }
-        // remove constraints except mouse + sling
-        const constraints = Composite.allConstraints(world);
-        for (const c of constraints) {
-          if (c === mouseConstraint.constraint) continue;
-          Composite.remove(world, c);
-        }
-        structure = [];
-        managers = [];
-      }
-
-      function buildHouse() {
-        const W = window.innerWidth;
-        const H = window.innerHeight;
-
-        // house position and size
-        const houseCenterX = Math.min(W * 0.72, W - 260);
-        const baseY = H - groundThickness - 10;
-
-        // size tuned: not too big, but wide enough for manager row
-        const houseWidth = Math.min(420, W * 0.36);
-        const floorGap = 150;        // height between floors
-        const beamThickness = 26;
-        const pillarWidth = 26;
-        const pillarHeight = floorGap * 2 + beamThickness * 2 + 30;
-
-        const leftX = houseCenterX - houseWidth/2;
-        const rightX = houseCenterX + houseWidth/2;
-
-        // bottom beam y
-        const bottomBeamY = baseY - 40;
-        const midBeamY = bottomBeamY - floorGap;
-        const topBeamY = midBeamY - floorGap;
-
-        // Pillars
-        const pillarY = (bottomBeamY + topBeamY)/2;
-
-        const commonPhys = {
-          friction: 0.9,
-          restitution: 0.02,
-          density: 0.0022,
-          render: { fillStyle: "rgba(255,255,255,0.05)" }
-        };
-
-        // Pillar sprites: keep proportions visually
-        const pillarH = pillarHeight;
-        const pillarW = pillarWidth;
-
-        const leftPillar = tagBreakable(
-          makeSpriteRect(leftX, pillarY, pillarW, pillarH,
-            { ...commonPhys }, SPR.pillar),
-          120, 40
-        );
-        const rightPillar = tagBreakable(
-          makeSpriteRect(rightX, pillarY, pillarW, pillarH,
-            { ...commonPhys }, SPR.pillar),
-          120, 40
-        );
-
-        // Beams (top/mid/bottom) - use beam sprite
-        const beamW = houseWidth + 24;
-        const beamH = beamThickness;
-
-        const bottomBeam = tagBreakable(
-          makeSpriteRect(houseCenterX, bottomBeamY, beamW, beamH,
-            { ...commonPhys }, SPR.beam),
-          90, 25
-        );
-        const midBeam = tagBreakable(
-          makeSpriteRect(houseCenterX, midBeamY, beamW, beamH,
-            { ...commonPhys }, SPR.beam),
-          90, 25
-        );
-        const topBeam = tagBreakable(
-          makeSpriteRect(houseCenterX, topBeamY, beamW, beamH,
-            { ...commonPhys }, SPR.beam),
-          90, 25
-        );
-
-        // Make sure they start aligned and stable
-        structure = [leftPillar, rightPillar, bottomBeam, midBeam, topBeam];
-        Composite.add(world, structure);
-
-        // Managers (small dynamic-ish but can be “protected”)
-        // Put 3 managers on mid level inside (you asked “больше менеджеров”)
-        // And keep them as breakable bodies too.
-        const managerCount = 3;
-        const mgrY = midBeamY - 34; // sit on midBeam
-        const mgrSpacing = 60;
-        const startX = houseCenterX - (mgrSpacing*(managerCount-1))/2;
-
-        managers = [];
-        for (let i=0; i<managerCount; i++) {
-          const mx = startX + i*mgrSpacing;
-          const mgr = tagBreakable(
-            makeSpriteRect(mx, mgrY, 56, 56, {
-              friction: 0.8,
-              restitution: 0.05,
-              density: 0.0016,
-              render: { fillStyle: "transparent" }
-            }, SPR.manager),
-            45, 60
-          );
-          managers.push(mgr);
-        }
-        Composite.add(world, managers);
-
-        // “Freeze” structure at start to avoid initial micro-collapses
-        structureFrozen = true;
-        freezeStructure(true);
-
-        // After a short settling, keep frozen until first shot
-        setTimeout(() => {
-          // still frozen; we only unfreeze on first launch
-        }, 300);
-      }
-
-      function freezeStructure(freeze) {
-        const bodies = [...structure, ...managers];
-        for (const b of bodies) {
-          if (!b) continue;
-          if (freeze) {
-            Body.setVelocity(b, { x: 0, y: 0 });
-            Body.setAngularVelocity(b, 0);
-            b.isStatic = true; // important: truly frozen
-          } else {
-            b.isStatic = false;
-          }
-        }
-      }
-
-      /********************
-       *  Bird + Slingshot
-       ********************/
-      const startPos = () => {
-        const W = window.innerWidth;
-        const H = window.innerHeight;
-        return {
-          x: Math.max(140, W * 0.13),
-          y: H - groundThickness - 70
-        };
-      };
-
+      // =========================
+      // Game objects refs
+      // =========================
       let bird = null;
       let sling = null;
       let slingAnchor = null;
-      let hasShot = false;
-      let shots = 0;
+      let mouseConstraint = null;
 
-      function updateShots() {
-        document.getElementById("shots").textContent = String(shots);
+      let structureBodies = []; // beams + pillars
+      let managers = [];
+      let debris = [];
+      let breakables = new Map(); // body.id -> {hp,maxHp,type}
+      let launched = false;
+      let respawnTimer = null;
+
+      // =========================
+      // Parameters (feel tuning)
+      // =========================
+      const params = {
+        // Позиции
+        birdStart: { x: 140, y: () => H() - 130 },
+        slingAnchor: { x: 165, y: () => H() - 155 },
+
+        // Ограничение натяжки
+        maxPull: 115,
+        power: 0.020, // чем меньше — тем слабее
+        autoRespawnMs: 2700,
+
+        // Домик — ближе к персонажу
+        houseX: () => Math.max(420, Math.min(W()*0.55, 650)),
+        houseYBase: () => H() - 160,
+
+        // Размеры (два этажа)
+        pillarW: 48,
+        pillarH: 240,
+        beamW: 360,
+        beamH: 42,
+        floorBeamW: 320,
+        floorBeamH: 38,
+
+        // Прочность
+        beamHP: 95,
+        pillarHP: 160,
+        breakHitMin: 7.0 // порог силы удара
+      };
+
+      // =========================
+      // Build: structure 2 floors + managers
+      // =========================
+      function addSleeping(body){
+        // чтобы не “расползалось” до удара
+        Sleeping.set(body, true);
+        body.sleepThreshold = 60;
       }
 
-      function spawnBird() {
-        const pos = startPos();
+      function makeBeam(x,y,w,h, imgBeam){
+        const b = Bodies.rectangle(x,y,w,h,{
+          friction: 0.9,
+          frictionStatic: 0.9,
+          restitution: 0.0,
+          density: 0.0026,
+          chamfer: 6
+        });
+        spriteOrFallback(b, imgBeam, w, h, "rgba(210,170,90,0.55)");
+        addSleeping(b);
 
-        // Bigger bird (human) as you wanted
-        bird = makeSpriteRect(pos.x, pos.y, 96, 72, {
-          friction: 0.8,
-          restitution: 0.05,
-          density: 0.0024,
-          render: { fillStyle: "transparent" }
-        }, SPR.humanIdle);
+        breakables.set(b.id, { hp: params.beamHP, maxHp: params.beamHP, type:"beam" });
+        structureBodies.push(b);
+        return b;
+      }
 
-        bird.label = "BIRD";
-        Composite.add(world, bird);
+      function makePillar(x,y,w,h, imgPillar){
+        const p = Bodies.rectangle(x,y,w,h,{
+          friction: 1.0,
+          frictionStatic: 1.0,
+          restitution: 0.0,
+          density: 0.0032,
+          chamfer: 8
+        });
+        spriteOrFallback(p, imgPillar, w, h, "rgba(190,140,70,0.55)");
+        addSleeping(p);
 
-        slingAnchor = { x: pos.x + 10, y: pos.y - 10 };
+        breakables.set(p.id, { hp: params.pillarHP, maxHp: params.pillarHP, type:"pillar" });
+        structureBodies.push(p);
+        return p;
+      }
 
+      function makeManager(x,y, imgManager){
+        const w = 86, h = 110;
+        const m = Bodies.rectangle(x,y,w,h,{
+          friction: 0.6,
+          restitution: 0.0,
+          density: 0.0016
+        });
+        spriteOrFallback(m, imgManager, w, h, "rgba(255,255,255,0.18)");
+        addSleeping(m);
+        managers.push(m);
+        return m;
+      }
+
+      function buildHouse(imgBeam, imgPillar, imgManager){
+        const hx = params.houseX();
+        const baseY = params.houseYBase();
+
+        const pillarW = params.pillarW;
+        const pillarH = params.pillarH;
+
+        const beamW = params.beamW;
+        const beamH = params.beamH;
+
+        const floorW = params.floorBeamW;
+        const floorH = params.floorBeamH;
+
+        // геометрия
+        const leftPillarX = hx - beamW/2 + pillarW/2;
+        const rightPillarX = hx + beamW/2 - pillarW/2;
+
+        const pillarY = baseY - pillarH/2; // стоит на полу
+
+        const topBeamY = baseY - pillarH + beamH/2;
+        const bottomBeamY = baseY - beamH/2;
+
+        const midBeamY = baseY - pillarH/2;          // “перекрытие” между этажами
+        const upperFloorY = baseY - pillarH + 85;    // верхний “пол”/перекладина под менеджеров
+
+        // 2 pillar
+        const leftP = makePillar(leftPillarX, pillarY, pillarW, pillarH, imgPillar);
+        const rightP = makePillar(rightPillarX, pillarY, pillarW, pillarH, imgPillar);
+
+        // 2 beam сверху/снизу
+        const topB = makeBeam(hx, topBeamY, beamW, beamH, imgBeam);
+        const bottomB = makeBeam(hx, bottomBeamY, beamW, beamH, imgBeam);
+
+        // “2 этажа” — перекладины
+        const midB = makeBeam(hx, midBeamY, floorW, floorH, imgBeam);
+        const upperB = makeBeam(hx, upperFloorY, floorW, floorH, imgBeam);
+
+        // аккуратно размещаем менеджеров: 3 сверху, 2 снизу
+        // важно: ширина этажа должна позволять менеджера — floorW достаточно.
+        const topY = upperFloorY - floorH/2 - 55;
+        const midY = midBeamY - floorH/2 - 55;
+
+        const spacingTop = 95;
+        const spacingMid = 115;
+
+        const topStartX = hx - spacingTop;
+        const midStartX = hx - spacingMid/2;
+
+        const m1 = makeManager(topStartX, topY, imgManager);
+        const m2 = makeManager(topStartX + spacingTop, topY, imgManager);
+        const m3 = makeManager(topStartX + spacingTop*2, topY, imgManager);
+
+        const m4 = makeManager(midStartX, midY, imgManager);
+        const m5 = makeManager(midStartX + spacingMid, midY, imgManager);
+
+        World.add(engine.world, [leftP, rightP, topB, bottomB, midB, upperB, m1, m2, m3, m4, m5]);
+      }
+
+      // =========================
+      // Bird + Slingshot
+      // =========================
+      function makeBird(imgIdle){
+        const x = params.birdStart.x;
+        const y = params.birdStart.y();
+
+        const w = 140, h = 110; // крупнее, как ты хотел
+        const b = Bodies.rectangle(x, y, w, h, {
+          friction: 0.6,
+          restitution: 0.0,
+          density: 0.0021
+        });
+        spriteOrFallback(b, imgIdle, w, h, "rgba(255,255,255,0.16)");
+
+        // чтобы не “проваливался” и не дрожал
+        b.sleepThreshold = 9999;
+        Sleeping.set(b, true);
+
+        return b;
+      }
+
+      function attachSlingshot(){
+        slingAnchor = { x: params.slingAnchor.x, y: params.slingAnchor.y() };
         sling = Constraint.create({
           pointA: slingAnchor,
           bodyB: bird,
-          pointB: { x: 0, y: 0 },
-          stiffness: 0.016,
-          damping: 0.05,
+          stiffness: 0.055,
+          damping: 0.12,
           length: 0
         });
-        Composite.add(world, sling);
+        World.add(engine.world, sling);
+      }
 
-        hasShot = false;
+      function setupMouse(){
+        if (mouseConstraint) {
+          World.remove(engine.world, mouseConstraint);
+          mouseConstraint = null;
+        }
+
+        const mouse = Mouse.create(render.canvas);
+        mouse.pixelRatio = render.options.pixelRatio;
+
+        mouseConstraint = MouseConstraint.create(engine, {
+          mouse,
+          constraint: {
+            stiffness: 0.02,
+            render: { visible: false }
+          }
+        });
+        World.add(engine.world, mouseConstraint);
+
+        // ограничим растягивание (пока тянем)
+        Events.on(mouseConstraint, "mousemove", () => {
+          if (!bird || launched) return;
+          if (!mouseConstraint.body) return; // не тянем
+
+          const mp = mouse.position;
+          const dx = mp.x - slingAnchor.x;
+          const dy = mp.y - slingAnchor.y;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+
+          if (dist > params.maxPull) {
+            const k = params.maxPull / dist;
+            const nx = slingAnchor.x + dx * k;
+            const ny = slingAnchor.y + dy * k;
+            Body.setPosition(bird, { x: nx, y: ny });
+          }
+        });
+
+        // отпуск
+        Events.on(mouseConstraint, "enddrag", (e) => {
+          if (!bird || launched) return;
+          if (e.body !== bird) return;
+          launchBird();
+        });
+      }
+
+      function switchBirdSprite(imgFly){
+        if (!bird) return;
+        const w = 130, h = 100;
+        spriteOrFallback(bird, imgFly, w, h, "rgba(255,255,255,0.16)");
+      }
+
+      function launchBird(){
+        if (!bird || launched) return;
+
+        setStatus("Пуск!");
+        launched = true;
+        shots++;
+        $shots.textContent = shots;
+
+        // разбудим птицу
+        Sleeping.set(bird, false);
+        bird.sleepThreshold = 60;
+
+        // отсоединяем стропу
+        World.remove(engine.world, sling);
+        sling = null;
+
+        // считаем импульс по натяжке
+        const dx = slingAnchor.x - bird.position.x;
+        const dy = slingAnchor.y - bird.position.y;
+        const pull = Math.min(params.maxPull, Math.sqrt(dx*dx + dy*dy));
+
+        // нормализуем
+        const dir = Vector.normalise({ x: dx, y: dy });
+
+        // сила
+        const impulseMag = pull * params.power;
+        const impulse = { x: dir.x * impulseMag, y: dir.y * impulseMag };
+
+        // поднимем полёт чуть выше (чтобы не в пол)
+        impulse.y -= 0.006;
+
+        Body.applyForce(bird, bird.position, impulse);
+
+        // авто-ресpawn через 2.7 сек, домик НЕ ресетим
+        clearTimeout(respawnTimer);
+        respawnTimer = setTimeout(() => {
+          respawnBirdOnly();
+        }, params.autoRespawnMs);
+      }
+
+      function respawnBirdOnly(){
+        setStatus("Респавн птицы (домик остаётся поломанным)");
+        // удалить старую птицу если улетела / мешает
+        if (bird) World.remove(engine.world, bird);
+
+        launched = false;
+
+        // новая птица
+        bird = makeBird(loaded.birdIdle);
+        World.add(engine.world, bird);
+
+        // вернуть стропу
+        attachSlingshot();
+        setupMouse();
         setStatus("Готов");
       }
 
-      function setBirdFlying(isFlying) {
-        if (!bird) return;
-        const img = isFlying ? SPR.humanFly : SPR.humanIdle;
-        if (!img) return;
-        bird.render.sprite.texture = img.src;
-        bird.render.sprite.xScale = bird.bounds.max.x - bird.bounds.min.x;
+      // =========================
+      // Break system (ломаем балки)
+      // =========================
+      function spawnDebrisFrom(body, imgBeam){
+        // создаем 3 обломка
+        const { x, y } = body.position;
+        const angle = body.angle;
+
+        const pieces = [];
+        for (let i=0;i<3;i++){
+          const w = 46 + Math.random()*30;
+          const h = 16 + Math.random()*14;
+          const px = x + (Math.random()-0.5)*40;
+          const py = y + (Math.random()-0.5)*20;
+
+          const piece = Bodies.rectangle(px, py, w, h, {
+            friction: 0.9,
+            restitution: 0.0,
+            density: 0.0018,
+            angle: angle + (Math.random()-0.5)*0.6
+          });
+
+          // можно тем же beam.png (будет норм)
+          spriteOrFallback(piece, imgBeam, w, h, "rgba(210,170,90,0.55)");
+          pieces.push(piece);
+          debris.push(piece);
+
+          // чуть толкнём
+          Body.applyForce(piece, piece.position, {
+            x: (Math.random()-0.5)*0.005,
+            y: (Math.random()-0.5)*0.005
+          });
+        }
+        World.add(engine.world, pieces);
       }
 
-      /********************
-       * Mouse control
-       ********************/
-      const mouse = Mouse.create(render.canvas);
-      const mouseConstraint = MouseConstraint.create(engine, {
-        mouse,
-        constraint: {
-          stiffness: 0.12,
-          render: { visible: false }
-        }
-      });
-      Composite.add(world, mouseConstraint);
-      render.mouse = mouse;
+      function damageBody(body, dmg){
+        const rec = breakables.get(body.id);
+        if (!rec) return;
 
-      // Limit pull distance
-      const MAX_PULL = 120;
+        rec.hp -= dmg;
 
-      function clampPull(point, anchor) {
-        const v = Vector.sub(point, anchor);
-        const d = Vector.magnitude(v);
-        if (d <= MAX_PULL) return point;
-        const dir = Vector.mult(Vector.normalise(v), MAX_PULL);
-        return Vector.add(anchor, dir);
-      }
+        if (rec.hp <= 0){
+          // ломаем
+          breakables.delete(body.id);
 
-      // When dragging bird, clamp mouse position effect
-      Events.on(mouseConstraint, "mousemove", (e) => {
-        // not needed
-      });
+          // счет
+          if (rec.type === "beam") {
+            brokenBeams++;
+            $broken.textContent = brokenBeams;
+            score += 10;
+            $score.textContent = score;
+          } else if (rec.type === "pillar") {
+            score += 15;
+            $score.textContent = score;
+          }
 
-      // On drag start: only if bird
-      Events.on(mouseConstraint, "startdrag", (e) => {
-        if (!bird) return;
-        if (e.body === bird && !hasShot) {
-          setStatus("Натяжка...");
-        }
-      });
+          // заменить на debris
+          const isBeam = rec.type === "beam";
+          const tex = loaded.beam;
 
-      // On drag: clamp bird position around anchor
-      Events.on(engine, "beforeUpdate", () => {
-        if (!bird || hasShot) return;
+          World.remove(engine.world, body);
 
-        const m = mouseConstraint.mouse.position;
-        if (!mouseConstraint.body) return;
+          // убрать из массивов
+          structureBodies = structureBodies.filter(b => b.id !== body.id);
 
-        if (mouseConstraint.body === bird) {
-          const clamped = clampPull(m, slingAnchor);
-          Body.setPosition(bird, clamped);
-          Body.setVelocity(bird, { x: 0, y: 0 });
-          Body.setAngularVelocity(bird, 0);
-        }
-      });
+          spawnDebrisFrom(body, tex);
 
-      // On release: launch
-      Events.on(mouseConstraint, "enddrag", (e) => {
-        if (!bird || !sling) return;
-        if (e.body !== bird) return;
-        if (hasShot) return;
-
-        // unfreeze structure on first shot so it doesn't fall earlier
-        if (structureFrozen) {
-          freezeStructure(false);
-          structureFrozen = false;
-        }
-
-        // Launch impulse based on pull vector
-        const pull = Vector.sub(slingAnchor, bird.position); // anchor - bird
-        const power = 0.055; // tuned to not fly out of screen
-        const impulse = Vector.mult(pull, power);
-
-        // Remove sling to launch
-        Composite.remove(world, sling);
-        sling = null;
-
-        // Push
-        Body.setVelocity(bird, { x: impulse.x * 12, y: impulse.y * 12 });
-        Body.setAngularVelocity(bird, 0);
-
-        hasShot = true;
-        shots += 1;
-        updateShots();
-        setStatus("Полет!");
-
-        // switch to fly sprite after release
-        if (SPR.humanFly) {
-          bird.render.sprite.texture = SPR.humanFly.src;
-          // Keep same scale: we already set based on size earlier
-          bird.render.sprite.xScale = (bird.bounds.max.x - bird.bounds.min.x) / SPR.humanFly.naturalWidth;
-          bird.render.sprite.yScale = (bird.bounds.max.y - bird.bounds.min.y) / SPR.humanFly.naturalHeight;
-        }
-
-        // Let destruction run 2.7s, then respawn new bird (structure stays)
-        setTimeout(() => {
-          respawnBirdKeepDamage();
-        }, 2700);
-      });
-
-      function respawnBirdKeepDamage() {
-        // remove bird if far away or stuck
-        if (bird) {
-          Composite.remove(world, bird);
-          bird = null;
-        }
-        spawnBird();
-        setStatus("Готов (домик остался поломанным)");
-      }
-
-      /********************
-       *  Breaking logic
-       ********************/
-      // Damage from collisions: use "collisionStart" + pair impulse approximation
-      Events.on(engine, "collisionStart", (event) => {
-        const pairs = event.pairs;
-        for (const p of pairs) {
-          const a = p.bodyA;
-          const b = p.bodyB;
-
-          // compute impact “strength” from relative velocity
-          const rel = Vector.sub(a.velocity, b.velocity);
-          const impact = Vector.magnitude(rel);
-
-          // Apply damage to breakables
-          applyImpactDamage(a, impact);
-          applyImpactDamage(b, impact);
-        }
-      });
-
-      function applyImpactDamage(body, impact) {
-        if (!body || !body.plugin || !body.plugin.breakable) return;
-
-        // ignore micro taps
-        if (impact < 2.2) return;
-
-        const bb = body.plugin.breakable;
-        if (bb.broken) return;
-
-        // Damage scaling
-        const dmg = impact * 10.5;
-
-        bb.hp -= dmg;
-
-        // Visual feedback: tint slightly as damaged
-        const hpRatio = Math.max(0, Math.min(1, bb.hp / 120));
-        const alpha = 0.12 + (1 - hpRatio) * 0.25;
-        body.render.strokeStyle = `rgba(255, 180, 80, ${alpha})`;
-        body.render.lineWidth = 2;
-
-        if (bb.hp <= 0) {
-          breakBody(body);
+          setStatus("ХРЯСЬ! (сломалось)");
         }
       }
 
-      /********************
-       *  Custom drawing (sling line)
-       ********************/
+      // collision -> считаем силу по относительной скорости
+      Events.on(engine, "collisionStart", (evt) => {
+        for (const pair of evt.pairs) {
+          const a = pair.bodyA;
+          const b = pair.bodyB;
+
+          const aRec = breakables.get(a.id);
+          const bRec = breakables.get(b.id);
+
+          // относительная скорость
+          const rvx = (a.velocity.x - b.velocity.x);
+          const rvy = (a.velocity.y - b.velocity.y);
+          const relSpeed = Math.sqrt(rvx*rvx + rvy*rvy);
+
+          if (relSpeed < params.breakHitMin) continue;
+
+          // урон
+          const dmg = Math.min(40, relSpeed * 4.2);
+
+          if (aRec) damageBody(a, dmg);
+          if (bRec) damageBody(b, dmg);
+        }
+      });
+
+      // =========================
+      // Draw sling line (красиво)
+      // =========================
       Events.on(render, "afterRender", () => {
         const ctx = render.context;
-        ctx.save();
+        if (!ctx) return;
 
-        // Draw sling line if attached
-        if (bird && sling && !hasShot) {
+        // рисуем резинку только если не запущено
+        if (bird && !launched && slingAnchor) {
+          ctx.save();
+          ctx.lineWidth = 6;
+          ctx.strokeStyle = "rgba(255,80,80,0.95)";
           ctx.beginPath();
           ctx.moveTo(slingAnchor.x, slingAnchor.y);
           ctx.lineTo(bird.position.x, bird.position.y);
-          ctx.strokeStyle = "rgba(255,80,80,0.65)";
-          ctx.lineWidth = 4;
           ctx.stroke();
 
-          // anchor dot
-          ctx.beginPath();
-          ctx.arc(slingAnchor.x, slingAnchor.y, 5, 0, Math.PI*2);
-          ctx.fillStyle = "rgba(255,255,255,0.65)";
-          ctx.fill();
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = "rgba(255,255,255,0.45)";
+          ctx.stroke();
+          ctx.restore();
         }
-
-        ctx.restore();
       });
 
-      /********************
-       *  Reset Button
-       ********************/
-      document.getElementById("resetBtn").addEventListener("click", () => {
+      // =========================
+      // Reset (всё заново)
+      // =========================
+      function fullReset(){
         setStatus("Сброс...");
-        score = 0;
-        brokenCount = 0;
-        shots = 0;
-        document.getElementById("score").textContent = "0";
-        document.getElementById("broken").textContent = "0";
-        updateShots();
 
-        clearWorldDynamic();
-        buildHouse();
-        spawnBird();
+        clearTimeout(respawnTimer);
+        respawnTimer = null;
+
+        // очистить мир, но оставить стены/пол
+        Composite.clear(engine.world, false);
+
+        // пересоздать пол/стены
+        floorBody = makeFloor();
+
+        // сброс статистики
+        score = 0; brokenBeams = 0; shots = 0;
+        $score.textContent = "0";
+        $broken.textContent = "0";
+        $shots.textContent = "0";
+
+        // очистить ссылки
+        structureBodies = [];
+        managers = [];
+        debris = [];
+        breakables.clear();
+
+        launched = false;
+
+        // домик + птица
+        buildHouse(loaded.beam, loaded.pillar, loaded.manager);
+        bird = makeBird(loaded.birdIdle);
+        World.add(engine.world, bird);
+
+        attachSlingshot();
+        setupMouse();
+
         setStatus("Готов");
-      });
-
-      /********************
-       *  Boot
-       ********************/
-      buildHouse();
-      spawnBird();
-      updateShots();
-      setStatus("Готов");
-
-      // One more safety: if assets missing, still run
-      if (!SPR.beam || !SPR.pillar || !SPR.manager || !SPR.humanIdle) {
-        console.warn("Some sprites not loaded. Game will still run with invisible/placeholder bodies.");
       }
 
-      // Improve stability a bit
-      engine.positionIterations = 8;
-      engine.velocityIterations = 6;
-      engine.constraintIterations = 3;
+      resetBtn.addEventListener("click", fullReset);
 
-      // Slight air friction for all bodies
-      Events.on(engine, "beforeUpdate", () => {
-        const bodies = Matter.Composite.allBodies(world);
-        for (const b of bodies) {
-          if (b.isStatic) continue;
-          // Keep it subtle
-          b.frictionAir = 0.015;
+      // =========================
+      // Load assets then start
+      // =========================
+      const loaded = {
+        beam:null, pillar:null, manager:null,
+        birdIdle:null, birdFly:null
+      };
+
+      async function boot(){
+        setStatus("Загрузка ассетов...");
+
+        // грузим PNG
+        const [beam, pillar, manager, birdIdle, birdFly] = await Promise.all([
+          loadImage(ASSETS.beam),
+          loadImage(ASSETS.pillar),
+          loadImage(ASSETS.manager),
+          loadImage(ASSETS.birdIdle),
+          loadImage(ASSETS.birdFly)
+        ]);
+
+        loaded.beam = beam;
+        loaded.pillar = pillar;
+        loaded.manager = manager;
+        loaded.birdIdle = birdIdle;
+        loaded.birdFly = birdFly;
+
+        // подсказка в статус: если что-то не загрузилось
+        const missing = [];
+        if (!beam) missing.push("beam.png");
+        if (!pillar) missing.push("pillar.png");
+        if (!manager) missing.push("manager.png");
+        if (!birdIdle) missing.push("human_idle.png");
+        if (!birdFly) missing.push("human_fly.png");
+
+        if (missing.length){
+          setStatus("Часть PNG не загрузилась: " + missing.join(", ") + " (включён fallback)");
+        } else {
+          setStatus("Готов");
         }
-      });
 
+        // строим дом + птица
+        buildHouse(loaded.beam, loaded.pillar, loaded.manager);
+
+        bird = makeBird(loaded.birdIdle);
+        World.add(engine.world, bird);
+
+        attachSlingshot();
+        setupMouse();
+
+        // при запуске дом не должен “поползти”
+        // sleeping уже включён, но на всякий разбудим только при первом попадании
+        setStatus("Готов");
+
+        // переключаем спрайт птицы на летящий после старта движения
+        Events.on(engine, "afterUpdate", () => {
+          if (!bird) return;
+          if (!launched) return;
+
+          // когда скорость заметная — ставим fly
+          const sp = Math.hypot(bird.velocity.x, bird.velocity.y);
+          if (sp > 2.2 && !bird.__flySet){
+            bird.__flySet = true;
+            switchBirdSprite(loaded.birdFly);
+          }
+
+          // если птица улетела далеко — можно убрать (чтобы не копилась)
+          if (bird.position.x > W() + 300 || bird.position.y > H() + 300 || bird.position.x < -300 || bird.position.y < -300){
+            // ждём ресpawn таймером, но чистим старую
+            World.remove(engine.world, bird);
+            bird = null;
+          }
+        });
+      }
+
+      boot();
     })();
   </script>
 </body>
