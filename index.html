@@ -2,8 +2,9 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<title>JS TEST (RAW)</title>
+<title>JS TEST (PAGES)</title>
 </head>
+
 <body style="background:#000;color:#0f0;font-size:32px">
 
 <h1>JS TEST</h1>
@@ -15,16 +16,20 @@ console.log("JS STARTED");
 document.getElementById("out").textContent = "JS WORKS ✅";
 
 const img = new Image();
+
 img.onload = () => {
-  document.body.append("  PNG LOADED ✅");
+  document.body.append(" PNG LOADED ✅");
+  document.body.appendChild(document.createElement("br"));
   document.body.appendChild(img);
 };
-img.onerror = () => {
-  document.body.append("  PNG ERROR ❌");
+
+img.onerror = (e) => {
+  console.error("IMG ERROR", e);
+  document.body.append(" PNG ERROR ❌");
 };
 
-// ✅ НАДЁЖНО: raw.githubusercontent.com
-img.src = "https://raw.githubusercontent.com/mrsvh879/happyshatrov/main/assets/player/chair.png?v=" + Date.now();
+// ✅ ПРАВИЛЬНО ДЛЯ GITHUB PAGES
+img.src = "assets/player/chair.png?v=" + Date.now();
 </script>
 
 </body>
