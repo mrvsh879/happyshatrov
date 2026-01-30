@@ -1,691 +1,197 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Office Birds — Level 1</title>
-  <style>
-    :root{
-      --bg1:#0b1220;
-      --panel: rgba(255,255,255,.08);
-      --text: rgba(255,255,255,.92);
-      --muted: rgba(255,255,255,.65);
-      --accent:#7cf7ff;
-      --danger:#ff6b8b;
-      --ok:#7CFFB2;
-    }
-    *{box-sizing:border-box}
-    body{
-      margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      color:var(--text);
-      background: radial-gradient(1200px 800px at 20% 10%, #13304a 0%, var(--bg1) 45%, #070b12 100%);
-      overflow:hidden;
-    }
-    #wrap{position:relative;width:100vw;height:100vh}
-    canvas{display:block;width:100%;height:100%}
+<meta charset="UTF-8" />
+<title>Office Birds MVP</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    .hud{
-      position:absolute;left:16px;top:16px;
-      display:flex;gap:10px;align-items:center;
-      padding:10px 12px;border-radius:14px;
-      background: linear-gradient(180deg, var(--panel), rgba(255,255,255,.04));
-      border:1px solid rgba(255,255,255,.10);
-      backdrop-filter: blur(10px);
-      box-shadow:0 10px 30px rgba(0,0,0,.35);
-      user-select:none;
-      z-index: 5;
-    }
-    .badge{
-      padding:6px 10px;border-radius:999px;
-      background: rgba(124,247,255,.12);
-      border:1px solid rgba(124,247,255,.25);
-      color:var(--accent);
-      font-weight:800;
-      font-size:12px;
-      letter-spacing:.2px;
-    }
-    .title{display:flex;flex-direction:column;gap:2px;min-width:240px}
-    .title b{font-size:13px}
-    .title span{font-size:12px;color:var(--muted)}
-    .btns{display:flex;gap:8px}
-    button{
-      appearance:none;
-      border:1px solid rgba(255,255,255,.14);
-      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.06));
-      color:var(--text);
-      padding:8px 10px;
-      border-radius:12px;
-      cursor:pointer;
-      font-weight:800;
-      font-size:12px;
-      transition: transform .08s ease, border-color .2s ease;
-    }
-    button:hover{border-color: rgba(124,247,255,.35)}
-    button:active{transform: translateY(1px) scale(.99)}
-    .danger{border-color: rgba(255,107,139,.35)}
-    .danger:hover{border-color: rgba(255,107,139,.55)}
+<style>
+html,body {
+  margin:0;
+  padding:0;
+  background:#050b14;
+  overflow:hidden;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto;
+}
+canvas { display:block; }
 
-    .tip{
-      position:absolute;right:16px;top:16px;
-      max-width:380px;
-      padding:12px 14px;border-radius:14px;
-      background: linear-gradient(180deg, var(--panel), rgba(255,255,255,.04));
-      border:1px solid rgba(255,255,255,.10);
-      backdrop-filter: blur(10px);
-      box-shadow:0 10px 30px rgba(0,0,0,.35);
-      font-size:12px;color:var(--muted);
-      user-select:none;
-      z-index: 5;
-    }
-    .tip b{color:var(--text)}
-    .hint{
-      position:absolute;left:16px;bottom:16px;
-      padding:10px 12px;border-radius:14px;
-      background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03));
-      border:1px solid rgba(255,255,255,.10);
-      backdrop-filter: blur(10px);
-      box-shadow:0 10px 30px rgba(0,0,0,.35);
-      font-size:12px;color:var(--muted);
-      user-select:none;
-      display:flex;gap:10px;align-items:center;
-      z-index: 5;
-    }
-    .dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.35)}
-    .dot.ok{background:var(--ok)}
-    .dot.bad{background:var(--danger)}
-
-    .loader{
-      position:absolute;inset:0;
-      display:flex;align-items:center;justify-content:center;
-      background: rgba(0,0,0,.35);
-      backdrop-filter: blur(6px);
-      z-index: 50;
-    }
-    .loaderCard{
-      width:min(560px, 92vw);
-      border-radius:18px;
-      border:1px solid rgba(255,255,255,.12);
-      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05));
-      box-shadow:0 20px 60px rgba(0,0,0,.45);
-      padding:16px;
-      user-select:none;
-    }
-    .loaderTitle{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
-    .loaderTitle b{font-size:14px}
-    .bar{
-      height:10px;border-radius:999px;
-      background: rgba(255,255,255,.10);
-      overflow:hidden;
-      border:1px solid rgba(255,255,255,.10);
-    }
-    .bar > div{
-      height:100%;
-      width:0%;
-      background: linear-gradient(90deg, rgba(124,247,255,.7), rgba(255,107,139,.65));
-      border-radius:999px;
-      transition: width .2s ease;
-    }
-    .loaderText{margin-top:10px;font-size:12px;color:var(--muted);line-height:1.35;white-space:pre-wrap}
-    code{background: rgba(255,255,255,.08); padding:2px 6px; border-radius:8px}
-  </style>
+#loader {
+  position:fixed;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:radial-gradient(circle at top left,#10243e,#050b14);
+  color:#e6f1ff;
+}
+#loaderBox {
+  width:320px;
+  padding:16px;
+  border-radius:12px;
+  background:rgba(255,255,255,0.06);
+  box-shadow:0 10px 30px rgba(0,0,0,0.4);
+}
+#bar {
+  height:10px;
+  background:#0b1c30;
+  border-radius:6px;
+  overflow:hidden;
+  margin-top:8px;
+}
+#bar > div {
+  height:100%;
+  width:0%;
+  background:linear-gradient(90deg,#4fd1c5,#63b3ed);
+  transition:width .2s;
+}
+#pct { float:right; opacity:.7; }
+</style>
 </head>
+
 <body>
-<div id="wrap">
-  <div class="hud">
-    <div class="badge">LEVEL 1</div>
-    <div class="title">
-      <b>Office Birds</b>
-      <span>Зажми на “человеке на стуле” → потяни → отпусти</span>
-    </div>
-    <div class="btns">
-      <button id="resetBtn" class="danger">Reset</button>
-      <button id="nextBtn">Next ▶</button>
-    </div>
-  </div>
 
-  <div class="tip">
-    <b>Цель:</b> развали офисный домик и сбей “наушников”.<br/>
-    <b>Фишка:</b> когда ты не трогаешь персонажа — он слегка <b>качает стул</b>.
+<div id="loader">
+  <div id="loaderBox">
+    <div>Грузим офисный цирк… <span id="pct">0%</span></div>
+    <div id="bar"><div></div></div>
   </div>
-
-  <div class="hint" id="assetHint">
-    <span class="dot" id="assetDot"></span>
-    <span id="assetHintText">Загрузка ассетов…</span>
-  </div>
-
-  <div class="loader" id="loader">
-    <div class="loaderCard">
-      <div class="loaderTitle">
-        <b>Грузим офисный цирк…</b>
-        <span id="loaderPct" style="color:var(--muted);font-size:12px">0%</span>
-      </div>
-      <div class="bar"><div id="loaderBar"></div></div>
-      <div class="loaderText" id="loaderText">
-Если застрянет на 0% — это значит ассеты не отдаются с GitHub Pages.
-Этот билд умеет подхватывать файлы по очереди:
-1) GitHub Pages
-2) jsDelivr CDN
-3) raw.githubusercontent
-      </div>
-    </div>
-  </div>
-
-  <canvas id="c"></canvas>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
+<canvas id="c"></canvas>
+
 <script>
-(() => {
-  const {
-    Engine, Render, Runner, Bodies, Body, Composite, Constraint,
-    Mouse, MouseConstraint, Events, Vector
-  } = Matter;
+/* ================== НАСТРОЙКИ ================== */
+const CDN = "https://cdn.jsdelivr.net/gh/mrsvh879/happyshatrov@main/";
 
-  const canvas = document.getElementById('c');
-  const loaderEl = document.getElementById('loader');
-  const loaderBar = document.getElementById('loaderBar');
-  const loaderPct = document.getElementById('loaderPct');
-  const loaderText = document.getElementById('loaderText');
+const ASSETS = {
+  chair: CDN + "assets/player/chair.png",
+  idle:  CDN + "assets/player/human_idle.png",
+  fly:   CDN + "assets/player/human_fly.png"
+};
 
-  const assetDot = document.getElementById('assetDot');
-  const assetHintText = document.getElementById('assetHintText');
+/* ================== CANVAS ================== */
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+function resize(){
+  canvas.width = innerWidth;
+  canvas.height = innerHeight;
+}
+addEventListener("resize", resize);
+resize();
 
-  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+/* ================== LOADER ================== */
+const IMG = {};
+const loader = document.getElementById("loader");
+const bar = document.querySelector("#bar > div");
+const pct = document.getElementById("pct");
 
-  // ---------- ASSETS ----------
-  const IMG = {
-    chair: null,
-    humanIdle: null,
-    humanFly: null
-  };
-
-  // --- ASSET SOURCES (Pages -> jsDelivr -> raw) ---
-  const GH_USER = "mrsvh879";
-  const GH_REPO = "happyshatrov";
-
-  // базовый путь для project pages: /<repo>/
-  const PAGES_BASE = (() => {
-    const parts = location.pathname.split("/").filter(Boolean); // ["happyshatrov", ...]
-    const repo = parts.length ? parts[0] : GH_REPO;
-    return `${location.origin}/${repo}/`;
-  })();
-
-  const ASSET_BASES = [
-    PAGES_BASE, // GitHub Pages
-    `https://cdn.jsdelivr.net/gh/${GH_USER}/${GH_REPO}@main/`, // CDN
-    `https://raw.githubusercontent.com/${GH_USER}/${GH_REPO}/main/` // fallback
-  ];
-
-  async function loadImageFromAnyBase(relPath) {
-    let lastErr = null;
-
-    for (const base of ASSET_BASES) {
-      const url = base + relPath + `?v=${Date.now()}`; // анти-кеш
-      try {
-        const img = await new Promise((resolve, reject) => {
-          const i = new Image();
-          const t = setTimeout(() => reject(new Error("timeout")), 8000);
-          i.onload = () => { clearTimeout(t); resolve(i); };
-          i.onerror = () => { clearTimeout(t); reject(new Error("load error")); };
-          i.src = url;
-        });
-        console.log("✅ asset loaded:", url);
-        return img;
-      } catch (e) {
-        console.warn("❌ asset failed:", base + relPath, e);
-        lastErr = e;
-      }
-    }
-    throw new Error(`Не могу загрузить ассет: ${relPath}. Последняя ошибка: ${lastErr}`);
-  }
-
-  async function loadAllAssets() {
-    const list = [
-      { key: "chair",     rel: "assets/player/chair.png" },
-      { key: "humanIdle", rel: "assets/player/human_idle.png" },
-      { key: "humanFly",  rel: "assets/player/human_fly.png" },
-    ];
-
-    let loaded = 0;
-    const total = list.length;
-
-    for (const item of list) {
-      loaderText.textContent = "Гружу: " + item.rel + "\n\nПробую источники:\n- " + ASSET_BASES.join("\n- ");
-      const img = await loadImageFromAnyBase(item.rel);
-      IMG[item.key] = img;
-
-      loaded++;
-      const pct = Math.round((loaded / total) * 100);
-      loaderBar.style.width = pct + "%";
-      loaderPct.textContent = pct + "%";
-    }
-  }
-
-  function showAssetsOk() {
-    assetDot.classList.remove('bad');
-    assetDot.classList.add('ok');
-    assetHintText.textContent = 'Ассеты подключены ✅';
-  }
-
-  function showAssetsBad(msg) {
-    assetDot.classList.remove('ok');
-    assetDot.classList.add('bad');
-    assetHintText.textContent = 'Ассеты НЕ загрузились ❌';
-
-    loaderText.textContent =
-      "Ошибка загрузки ассетов:\n" + msg + "\n\n" +
-      "Проверь:\n" +
-      "1) что репо публичный\n" +
-      "2) что файлы существуют в main: assets/player/*.png\n" +
-      "3) если Pages не отдает — CDN (jsDelivr) подтянет в течение минуты\n\n" +
-      "Если не подтянуло: открой консоль и пришли строку 'asset failed' (там будет причина).";
-  }
-
-  // ---------- ENGINE ----------
-  const engine = Engine.create();
-  engine.gravity.y = 1.05;
-
-  const render = Render.create({
-    canvas,
-    engine,
-    options: {
-      width: window.innerWidth,
-      height: window.innerHeight,
-      wireframes: false,
-      background: 'transparent',
-      pixelRatio: Math.min(window.devicePixelRatio || 1, 2)
-    }
+async function loadImage(key, url, i, total){
+  return new Promise((res, rej)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      IMG[key]=img;
+      const p = Math.round(((i+1)/total)*100);
+      bar.style.width = p+"%";
+      pct.textContent = p+"%";
+      res();
+    };
+    img.onerror = ()=>rej("fail "+url);
+    img.src = url + "?v=" + Date.now();
   });
+}
 
-  const runner = Runner.create();
-  Runner.run(runner, engine);
-  Render.run(render);
-
-  function resizeCanvas() {
-    render.options.width = window.innerWidth;
-    render.options.height = window.innerHeight;
-    const pr = render.options.pixelRatio;
-
-    render.canvas.width = Math.floor(window.innerWidth * pr);
-    render.canvas.height = Math.floor(window.innerHeight * pr);
-    render.canvas.style.width = window.innerWidth + 'px';
-    render.canvas.style.height = window.innerHeight + 'px';
+(async()=>{
+  const entries = Object.entries(ASSETS);
+  for(let i=0;i<entries.length;i++){
+    await loadImage(entries[i][0], entries[i][1], i, entries.length);
   }
-
-  function roundRect(ctx, x, y, w, h, r){
-    const rr = Math.min(r, w/2, h/2);
-    ctx.beginPath();
-    ctx.moveTo(x+rr, y);
-    ctx.lineTo(x+w-rr, y);
-    ctx.quadraticCurveTo(x+w, y, x+w, y+rr);
-    ctx.lineTo(x+w, y+h-rr);
-    ctx.quadraticCurveTo(x+w, y+h, x+w-rr, y+h);
-    ctx.lineTo(x+rr, y+h);
-    ctx.quadraticCurveTo(x, y+h, x, y+h-rr);
-    ctx.lineTo(x, y+rr);
-    ctx.quadraticCurveTo(x, y, x+rr, y);
-    ctx.closePath();
-  }
-
-  function drawBackground(ctx) {
-    const w = render.options.width, h = render.options.height;
-
-    ctx.save();
-    const g = ctx.createLinearGradient(0, h*0.55, 0, h);
-    g.addColorStop(0, 'rgba(255,255,255,0)');
-    g.addColorStop(1, 'rgba(255,255,255,0.06)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, h*0.55, w, h*0.45);
-
-    for (let i=0;i<3;i++){
-      const x = w*(0.15 + i*0.23);
-      const lg = ctx.createRadialGradient(x, h*0.1, 10, x, h*0.1, h*0.9);
-      lg.addColorStop(0, 'rgba(124,247,255,0.10)');
-      lg.addColorStop(1, 'rgba(124,247,255,0)');
-      ctx.fillStyle = lg;
-      ctx.beginPath();
-      ctx.ellipse(x, h*0.25, w*0.18, h*0.55, 0, 0, Math.PI*2);
-      ctx.fill();
-    }
-    ctx.restore();
-  }
-
-  function drawOfficePerson(ctx, body) {
-    const p = body.position;
-    ctx.save();
-    ctx.translate(p.x, p.y);
-    ctx.rotate(body.angle);
-
-    ctx.globalAlpha = 0.25;
-    ctx.fillStyle = '#000';
-    ctx.beginPath();
-    ctx.ellipse(0, 18, 26, 10, 0, 0, Math.PI*2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-
-    ctx.fillStyle = 'rgba(255,255,255,0.92)';
-    ctx.beginPath();
-    ctx.arc(0, 0, 16, 0, Math.PI*2);
-    ctx.fill();
-
-    ctx.strokeStyle = 'rgba(124,247,255,0.9)';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.arc(0, -2, 18, Math.PI*0.15, Math.PI*0.85);
-    ctx.stroke();
-
-    ctx.fillStyle = 'rgba(124,247,255,0.9)';
-    ctx.beginPath(); ctx.arc(-15, 2, 5.5, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.arc( 15, 2, 5.5, 0, Math.PI*2); ctx.fill();
-
-    ctx.strokeStyle = 'rgba(255,107,139,0.9)';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(12, 8);
-    ctx.lineTo(24, 14);
-    ctx.stroke();
-
-    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(-5, 8);
-    ctx.lineTo(5, 8);
-    ctx.stroke();
-
-    ctx.restore();
-  }
-
-  function drawImageOnBody(ctx, body, img, w, h, ox=0, oy=0) {
-    if (!img) return;
-    ctx.save();
-    ctx.translate(body.position.x, body.position.y);
-    ctx.rotate(body.angle);
-    ctx.drawImage(img, -w/2 + ox, -h/2 + oy, w, h);
-    ctx.restore();
-  }
-
-  // ---------- WORLD ----------
-  let ground, leftWall, rightWall;
-  let slingAnchor, slingConstraint, projectile;
-  let mouseConstraint;
-  let officeBlocks = [];
-  let officePeople = [];
-  let hasLaunched = false;
-
-  function clearWorld() {
-    Composite.clear(engine.world, false);
-    officeBlocks = [];
-    officePeople = [];
-    ground = leftWall = rightWall = null;
-    slingAnchor = slingConstraint = projectile = null;
-    mouseConstraint = null;
-    hasLaunched = false;
-  }
-
-  function buildLevel() {
-    clearWorld();
-
-    const W = window.innerWidth;
-    const H = window.innerHeight;
-
-    ground = Bodies.rectangle(W/2, H+40, W+200, 120, {
-      isStatic: true,
-      render: { fillStyle: 'rgba(255,255,255,0.08)' }
-    });
-    leftWall = Bodies.rectangle(-60, H/2, 120, H+200, { isStatic: true, render: { visible:false }});
-    rightWall = Bodies.rectangle(W+60, H/2, 120, H+200, { isStatic: true, render: { visible:false }});
-    Composite.add(engine.world, [ground, leftWall, rightWall]);
-
-    const slingX = W * 0.18;
-    const slingY = H * 0.62;
-    slingAnchor = { x: slingX, y: slingY };
-
-    projectile = Bodies.circle(slingX + 40, slingY - 10, 26, {
-      density: 0.005,
-      restitution: 0.35,
-      friction: 0.6,
-      frictionAir: 0.012,
-      render: { visible: false }
-    });
-
-    slingConstraint = Constraint.create({
-      pointA: slingAnchor,
-      bodyB: projectile,
-      stiffness: 0.028,
-      damping: 0.06,
-      length: 10,
-      render: { strokeStyle: 'rgba(124,247,255,0.65)', lineWidth: 4 }
-    });
-
-    Composite.add(engine.world, [projectile, slingConstraint]);
-
-    const slingPlatform = Bodies.rectangle(slingX+40, slingY+60, 260, 24, {
-      isStatic: true,
-      render: { fillStyle: 'rgba(255,255,255,0.10)' }
-    });
-    Composite.add(engine.world, slingPlatform);
-
-    // office tower
-    const baseX = W * 0.72;
-    const baseY = H * 0.70;
-
-    const officeBase = Bodies.rectangle(baseX, baseY+90, 440, 26, {
-      isStatic: true,
-      render: { fillStyle: 'rgba(255,255,255,0.10)' }
-    });
-    Composite.add(engine.world, officeBase);
-
-    const blockOpts = (fill) => ({
-      density: 0.0022,
-      restitution: 0.15,
-      friction: 0.8,
-      render: { fillStyle: fill, strokeStyle: 'rgba(255,255,255,0.10)', lineWidth: 1 }
-    });
-
-    const glass = 'rgba(124,247,255,0.10)';
-    const wood  = 'rgba(255,255,255,0.12)';
-    const metal = 'rgba(255,255,255,0.16)';
-
-    officeBlocks.push(
-      Bodies.rectangle(baseX-120, baseY+40, 26, 140, blockOpts(wood)),
-      Bodies.rectangle(baseX+120, baseY+40, 26, 140, blockOpts(wood)),
-      Bodies.rectangle(baseX,      baseY-30, 340, 26, blockOpts(metal)),
-      Bodies.rectangle(baseX-90, baseY-80, 22, 120, blockOpts(glass)),
-      Bodies.rectangle(baseX+90, baseY-80, 22, 120, blockOpts(glass)),
-      Bodies.rectangle(baseX,    baseY-150, 260, 22, blockOpts(metal)),
-      Bodies.rectangle(baseX-60, baseY-210, 20, 90, blockOpts(wood)),
-      Bodies.rectangle(baseX+60, baseY-210, 20, 90, blockOpts(wood)),
-      Bodies.rectangle(baseX,    baseY-255, 180, 18, blockOpts(metal))
-    );
-    Composite.add(engine.world, officeBlocks);
-
-    function addOfficePerson(x, y) {
-      const b = Bodies.circle(x, y, 18, {
-        density: 0.0014,
-        restitution: 0.25,
-        friction: 0.9,
-        frictionAir: 0.02,
-        render: { visible: false }
-      });
-      officePeople.push(b);
-      Composite.add(engine.world, b);
-    }
-    addOfficePerson(baseX - 60, baseY + 10);
-    addOfficePerson(baseX + 10, baseY - 110);
-    addOfficePerson(baseX + 40, baseY - 210);
-
-    // mouse
-    const mouse = Mouse.create(render.canvas);
-    mouse.pixelRatio = render.options.pixelRatio;
-
-    mouseConstraint = MouseConstraint.create(engine, {
-      mouse,
-      constraint: {
-        stiffness: 0.12,
-        damping: 0.12,
-        render: { visible: false }
-      }
-    });
-    Composite.add(engine.world, mouseConstraint);
-
-    // prevent mobile scroll
-    render.canvas.addEventListener('touchstart', e => e.preventDefault(), { passive:false });
-    render.canvas.addEventListener('touchmove', e => e.preventDefault(), { passive:false });
-
-    // --- launch direction: куда натянул — туда полетел ---
-    Events.off(mouseConstraint, 'enddrag');
-    Events.on(mouseConstraint, 'enddrag', (evt) => {
-      if (evt.body !== projectile) return;
-      if (!slingConstraint.bodyB) return;
-
-      const stretchVec = Vector.sub(projectile.position, slingAnchor); // projectile - anchor
-      const d = Vector.magnitude(stretchVec);
-
-      if (d > 35) {
-        slingConstraint.bodyB = null; // release
-        hasLaunched = true;
-
-        const dir = Vector.normalise(stretchVec);
-        const power = clamp(d / 220, 0, 1);
-        const forceMag = 0.018 + power * 0.030;
-        Body.applyForce(projectile, projectile.position, Vector.mult(dir, forceMag));
-      }
-    });
-
-    // clamp drag distance + idle rocking
-    Events.off(engine, 'afterUpdate');
-    Events.on(engine, 'afterUpdate', () => {
-      if (!projectile) return;
-
-      const dragging = mouseConstraint.body === projectile;
-
-      // idle качание, пока не трогаем и не запускали
-      if (slingConstraint.bodyB && !dragging) {
-        const t = engine.timing.timestamp * 0.002;
-        Body.setAngularVelocity(projectile, Math.sin(t) * 0.02);
-
-        // подтягиваем к "домашней" позиции
-        const home = { x: slingAnchor.x + 40, y: slingAnchor.y - 10 };
-        const toHome = Vector.sub(home, projectile.position);
-        Body.applyForce(projectile, projectile.position, Vector.mult(toHome, 0.00003));
-      }
-
-      // ограничение натяжения
-      if (dragging && slingConstraint.bodyB) {
-        const v = Vector.sub(projectile.position, slingAnchor);
-        const mag = Vector.magnitude(v);
-        if (mag > 220) {
-          const nv = Vector.mult(Vector.normalise(v), 220);
-          Body.setPosition(projectile, Vector.add(slingAnchor, nv));
-        }
-      }
-    });
-
-    resizeCanvas();
-  }
-
-  // ---------- CUSTOM RENDER ----------
-  Events.off(render, 'beforeRender');
-  Events.off(render, 'afterRender');
-
-  Events.on(render, 'beforeRender', () => {
-    const ctx = render.context;
-    ctx.setTransform(1,0,0,1,0,0);
-    ctx.clearRect(0,0,render.canvas.width, render.canvas.height);
-
-    const pr = render.options.pixelRatio;
-    ctx.scale(pr, pr);
-    drawBackground(ctx);
-  });
-
-  Events.on(render, 'afterRender', () => {
-    if (!projectile) return;
-
-    const ctx = render.context;
-    const pr = render.options.pixelRatio;
-
-    ctx.save();
-    ctx.setTransform(pr,0,0,pr,0,0);
-
-    // sling post
-    ctx.save();
-    ctx.translate(slingAnchor.x, slingAnchor.y);
-    ctx.fillStyle = 'rgba(255,255,255,0.10)';
-    roundRect(ctx, -14, -40, 28, 120, 12); ctx.fill();
-    ctx.fillStyle = 'rgba(124,247,255,0.20)';
-    roundRect(ctx, -10, -36, 20, 36, 10); ctx.fill();
-    ctx.restore();
-
-    // band line
-    if (slingConstraint && slingConstraint.bodyB) {
-      const a = slingAnchor;
-      const b = projectile.position;
-      ctx.strokeStyle = 'rgba(255,107,139,0.75)';
-      ctx.lineWidth = 6;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.stroke();
-    }
-
-    // NPC
-    for (const p of officePeople) drawOfficePerson(ctx, p);
-
-    // --- DRAW PLAYER (PNG) ---
-    const isFlying = !(slingConstraint && slingConstraint.bodyB);
-
-    // стул
-    drawImageOnBody(ctx, projectile, IMG.chair, 160, 160, 0, 25);
-
-    // человек
-    const humanImg = isFlying ? IMG.humanFly : IMG.humanIdle;
-    if (isFlying) {
-      drawImageOnBody(ctx, projectile, humanImg, 170, 170, 35, -35);
-    } else {
-      drawImageOnBody(ctx, projectile, humanImg, 180, 180, 20, -35);
-    }
-
-    ctx.restore();
-  });
-
-  // ---------- UI ----------
-  document.getElementById('resetBtn').addEventListener('click', () => buildLevel());
-  document.getElementById('nextBtn').addEventListener('click', () => { /* заглушка под уровни */ });
-
-  window.addEventListener('resize', () => {
-    resizeCanvas();
-    buildLevel();
-  });
-
-  // ---------- START ----------
-  (async () => {
-    try {
-      assetDot.classList.remove('ok','bad');
-      assetHintText.textContent = 'Загрузка ассетов…';
-      loaderEl.style.display = 'flex';
-
-      await loadAllAssets();
-
-      loaderBar.style.width = '100%';
-      loaderPct.textContent = '100%';
-      loaderText.textContent = 'Готово! Запускаю уровень…';
-
-      showAssetsOk();
-
-      setTimeout(() => {
-        loaderEl.style.display = 'none';
-        buildLevel();
-      }, 200);
-
-    } catch (e) {
-      console.error(e);
-      showAssetsBad(String(e && e.message ? e.message : e));
-      loaderEl.style.display = 'flex';
-    }
-  })();
+  loader.remove();
+  start();
 })();
+
+/* ================== GAME ================== */
+let chair, human;
+let dragging=false;
+let anchor={x:200,y:canvas.height-140};
+
+function start(){
+  chair = {
+    x: anchor.x,
+    y: anchor.y,
+    w: 120,
+    h: 120
+  };
+  human = {
+    x: chair.x,
+    y: chair.y-60,
+    vx:0, vy:0,
+    flying:false
+  };
+  loop();
+}
+
+canvas.addEventListener("mousedown",e=>{
+  const dx=e.offsetX-human.x;
+  const dy=e.offsetY-human.y;
+  if(dx*dx+dy*dy<40*40){
+    dragging=true;
+  }
+});
+
+canvas.addEventListener("mouseup",e=>{
+  if(!dragging) return;
+  dragging=false;
+  const dx = anchor.x - human.x;
+  const dy = anchor.y - human.y;
+  human.vx = dx*0.18;
+  human.vy = dy*0.18;
+  human.flying=true;
+});
+
+canvas.addEventListener("mousemove",e=>{
+  if(dragging){
+    human.x = e.offsetX;
+    human.y = e.offsetY;
+  }
+});
+
+function loop(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  if(human.flying){
+    human.vy += 0.8;
+    human.x += human.vx;
+    human.y += human.vy;
+  } else {
+    human.x = chair.x;
+    human.y = chair.y-60;
+  }
+
+  // линия натяжения
+  if(dragging){
+    ctx.strokeStyle="#4fd1c5";
+    ctx.lineWidth=3;
+    ctx.beginPath();
+    ctx.moveTo(anchor.x,anchor.y);
+    ctx.lineTo(human.x,human.y);
+    ctx.stroke();
+  }
+
+  // chair
+  ctx.drawImage(
+    IMG.chair,
+    chair.x-chair.w/2,
+    chair.y-chair.h/2,
+    chair.w,
+    chair.h
+  );
+
+  // human
+  const hImg = human.flying ? IMG.fly : IMG.idle;
+  ctx.drawImage(hImg, human.x-50, human.y-50, 100,100);
+
+  requestAnimationFrame(loop);
+}
 </script>
 </body>
 </html>
