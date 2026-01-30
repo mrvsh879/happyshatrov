@@ -7,50 +7,32 @@
   <style>
     html,body{margin:0;height:100%;background:#050b14;overflow:hidden;font-family:system-ui,-apple-system,Segoe UI,Roboto}
     canvas{display:block}
-    .hud{
-      position:fixed;left:14px;top:12px;z-index:10;display:flex;gap:10px;align-items:flex-start;
-      color:#eaf6ff
-    }
+    .hud{position:fixed;left:14px;top:12px;z-index:10;display:flex;gap:10px;align-items:flex-start;color:#eaf6ff}
     .panel{
-      padding:10px 12px;border-radius:12px;
-      background:rgba(255,255,255,.06);
-      border:1px solid rgba(255,255,255,.12);
-      backdrop-filter: blur(8px);
-      box-shadow:0 12px 30px rgba(0,0,0,.35);
-      font-size:12px;line-height:1.3;
-      min-width:260px;
+      padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.12);backdrop-filter: blur(8px);
+      box-shadow:0 12px 30px rgba(0,0,0,.35);font-size:12px;line-height:1.3;min-width:280px
     }
     .tag{display:inline-block;padding:3px 8px;border-radius:999px;background:rgba(124,247,255,.12);border:1px solid rgba(124,247,255,.22);font-weight:800}
     .row{display:flex;gap:10px;align-items:center;justify-content:space-between}
     button{
-      cursor:pointer;
-      border:1px solid rgba(255,255,255,.18);
-      background:rgba(255,255,255,.08);
-      color:#fff;
-      padding:9px 11px;border-radius:12px;
-      font-weight:800;
+      cursor:pointer;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);
+      color:#fff;padding:9px 11px;border-radius:12px;font-weight:800
     }
     button:hover{background:rgba(255,255,255,.12)}
     .goal{
-      position:fixed;right:14px;top:12px;z-index:10;
-      padding:10px 12px;border-radius:12px;
-      background:rgba(255,255,255,.06);
-      border:1px solid rgba(255,255,255,.12);
-      color:#eaf6ff;font-size:12px;line-height:1.3;
-      width:240px;
-      backdrop-filter: blur(8px);
-      box-shadow:0 12px 30px rgba(0,0,0,.35);
+      position:fixed;right:14px;top:12px;z-index:10;padding:10px 12px;border-radius:12px;
+      background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);
+      color:#eaf6ff;font-size:12px;line-height:1.3;width:260px;
+      backdrop-filter: blur(8px);box-shadow:0 12px 30px rgba(0,0,0,.35)
     }
     #loader{
       position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:999;
-      background:radial-gradient(circle at 20% 20%, #10243e, #050b14);
-      color:#e6f1ff;
+      background:radial-gradient(circle at 20% 20%, #10243e, #050b14);color:#e6f1ff
     }
     #loaderBox{
-      width:340px;padding:16px;border-radius:12px;
-      background:rgba(255,255,255,0.06);
-      box-shadow:0 10px 30px rgba(0,0,0,0.4);
-      border:1px solid rgba(255,255,255,.12);
+      width:360px;padding:16px;border-radius:12px;background:rgba(255,255,255,0.06);
+      box-shadow:0 10px 30px rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,.12)
     }
     #bar{height:10px;background:#0b1c30;border-radius:6px;overflow:hidden;margin-top:8px}
     #bar>div{height:100%;width:0%;background:linear-gradient(90deg,#4fd1c5,#63b3ed);transition:width .2s}
@@ -65,7 +47,7 @@
     <div>Грузим офисный цирк… <span id="pct">0%</span></div>
     <div id="bar"><div></div></div>
     <div style="margin-top:10px;opacity:.7;font-size:12px">
-      Пути должны быть: <code>assets/player/...</code>
+      Проверь папки: <code>assets/player</code> и <code>assets/office</code>
     </div>
   </div>
 </div>
@@ -79,12 +61,15 @@
     <div style="margin-top:8px;opacity:.85">
       Зажми на “человеке на стуле” → потяни назад → отпусти.
     </div>
+    <div style="margin-top:6px;opacity:.75">
+      Урон зависит от скорости удара. Стекло ломается быстрее.
+    </div>
   </div>
 </div>
 
 <div class="goal">
-  <b>Цель:</b> развали офисный домик и “сбей” работников в наушниках.
-  <div style="opacity:.8;margin-top:6px">Пока не трогаешь — он качается вперёд/назад.</div>
+  <b>Цель:</b> развали офисный домик и сбей “работников в наушниках”.
+  <div style="opacity:.8;margin-top:6px">Пока не трогаешь — качание вперёд/назад.</div>
 </div>
 
 <canvas id="c"></canvas>
@@ -92,9 +77,16 @@
 <script>
 /* ================== ASSETS ================== */
 const ASSETS = {
+  // player
   chair: "assets/player/chair.png",
-  idle:  "assets/player/human_idle.png", // в этом спрайте уже есть кресло
-  fly:   "assets/player/human_fly.png"
+  idle:  "assets/player/human_idle.png", // человек+кресло
+  fly:   "assets/player/human_fly.png",
+  // office
+  beam:    "assets/office/beam.png",
+  pillar:  "assets/office/pillar.png",
+  desk:    "assets/office/desk.png",
+  monitor: "assets/office/monitor.png",
+  glass:   "assets/office/glass.png"
 };
 
 const IMG = {};
@@ -130,54 +122,66 @@ resize();
 
 /* ================== CONFIG ================== */
 const CFG = {
-  gravity: 0.85,
+  gravity: 0.86,
   air: 0.992,
   floorYPad: 34,
   bounce: 0.22,
   friction: 0.78,
 
-  // как Angry Birds: чем дальше оттянул — тем сильнее
   launchK: 0.23,
   maxPull: 220,
 
-  // ✅ idle качание вперёд/назад (rotation)
   rockAngleDeg: 10,
-  rockSpeed: 0.035
+  rockSpeed: 0.035,
+
+  // damage tuning
+  baseDamage: 1.25,      // множитель урона от скорости
+  glassMul: 2.0,         // стекло ломается быстрее
+  shakeMul: 0.08,        // тряска камеры от удара
+  particlesPerHit: 8,
 };
 
 function anchorPoint(){
   return { x: Math.round(canvas.width*0.18), y: Math.round(canvas.height*0.74) };
 }
 
-/* ================== WORLD / LEVEL ================== */
-const level = { blocks: [], dudes: [] };
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+/* ================== WORLD ================== */
+const level = { blocks: [], dudes: [], particles: [] };
+
+function addBlock({x,y,w,h,hp, imgKey, kind="solid"}){
+  level.blocks.push({x,y,w,h,hp, imgKey, kind});
+}
 
 function buildLevel(){
   level.blocks = [];
   level.dudes = [];
+  level.particles = [];
 
   const baseX = Math.round(canvas.width*0.82);
   const baseY = Math.round(canvas.height*0.80);
 
-  const h = 20, colW = 20, colH = 95;
+  // основание (условно)
+  addBlock({x: baseX, y: baseY, w: 280, h: 26, hp: 999, imgKey: "beam"});
 
-  // нижняя платформа
-  level.blocks.push({x: baseX, y: baseY, w: 260, h: 26, hp: 999});
+  // этаж 1: колонны + балка + стол + монитор + стекло
+  addBlock({x: baseX-90, y: baseY-110, w: 44, h: 150, hp: 80, imgKey:"pillar"});
+  addBlock({x: baseX+90, y: baseY-110, w: 44, h: 150, hp: 80, imgKey:"pillar"});
+  addBlock({x: baseX, y: baseY-190, w: 230, h: 36, hp: 110, imgKey:"beam"});
 
-  // этаж 1
-  level.blocks.push({x: baseX, y: baseY-70, w: 220, h: h, hp: 90});
-  level.blocks.push({x: baseX-80, y: baseY-120, w: colW, h: colH, hp: 60});
-  level.blocks.push({x: baseX+80, y: baseY-120, w: colW, h: colH, hp: 60});
+  addBlock({x: baseX, y: baseY-250, w: 250, h: 120, hp: 90, imgKey:"desk"});
+  addBlock({x: baseX+20, y: baseY-300, w: 110, h: 100, hp: 35, imgKey:"monitor"});
+  addBlock({x: baseX-30, y: baseY-330, w: 200, h: 38, hp: 25, imgKey:"glass", kind:"glass"});
 
-  // этаж 2
-  level.blocks.push({x: baseX, y: baseY-170, w: 180, h: h, hp: 70});
-  level.blocks.push({x: baseX-60, y: baseY-220, w: colW, h: colH, hp: 50});
-  level.blocks.push({x: baseX+60, y: baseY-220, w: colW, h: colH, hp: 50});
-
-  // “офисные работники” (пока кружки)
-  level.dudes.push({x: baseX, y: baseY-95, r: 14, alive: true});
-  level.dudes.push({x: baseX, y: baseY-195, r: 14, alive: true});
+  // “работники” (пока кружки, потом нарисуем PNG)
+  level.dudes.push({x: baseX-20, y: baseY-210, r: 14, alive: true});
+  level.dudes.push({x: baseX+40, y: baseY-290, r: 14, alive: true});
 }
+
+/* ================== BACKGROUND / DRAW ================== */
+let camShake = 0;
+let camShakeX=0, camShakeY=0;
 
 function bg(){
   const g = ctx.createRadialGradient(canvas.width*0.2, canvas.height*0.2, 60, canvas.width*0.2, canvas.height*0.2, canvas.height);
@@ -192,28 +196,29 @@ function drawGround(){
   ctx.fillRect(0, canvas.height-CFG.floorYPad, canvas.width, 6);
 }
 
-function drawBlocks(){
-  for (const b of level.blocks){
-    if (b.hp <= 0) continue;
-    const k = Math.max(0.25, Math.min(1, b.hp/100));
-    ctx.fillStyle = `rgba(255,255,255,${0.08*k})`;
-    ctx.strokeStyle = `rgba(255,255,255,${0.18*k})`;
-    ctx.lineWidth = 2;
+function drawBlock(b){
+  if (b.hp<=0) return;
 
-    const x = b.x - b.w/2;
-    const y = b.y - b.h/2;
-    ctx.fillRect(x,y,b.w,b.h);
-    ctx.strokeRect(x,y,b.w,b.h);
-  }
+  // лёгкая “индикация здоровья”
+  const k = b.hp>=999 ? 1 : clamp(b.hp/110, 0.25, 1);
+  ctx.globalAlpha = 0.55 + 0.45*k;
+
+  const x = b.x - b.w/2;
+  const y = b.y - b.h/2;
+  ctx.drawImage(IMG[b.imgKey], x, y, b.w, b.h);
+
+  ctx.globalAlpha = 1;
+}
+
+function drawBlocks(){
+  for (const b of level.blocks) drawBlock(b);
 }
 
 function drawDudes(){
   for (const d of level.dudes){
     if (!d.alive) continue;
     ctx.fillStyle = "rgba(255,255,255,0.92)";
-    ctx.beginPath();
-    ctx.arc(d.x,d.y,d.r,0,Math.PI*2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(d.x,d.y,d.r,0,Math.PI*2); ctx.fill();
 
     // наушники
     ctx.strokeStyle = "rgba(124,247,255,0.9)";
@@ -224,6 +229,50 @@ function drawDudes(){
   }
 }
 
+/* ================== PARTICLES ================== */
+function spawnParticles(x,y, n, tone="solid"){
+  for(let i=0;i<n;i++){
+    const a = Math.random()*Math.PI*2;
+    const sp = 2 + Math.random()*6;
+    const p = {
+      x,y,
+      vx: Math.cos(a)*sp,
+      vy: Math.sin(a)*sp - 2,
+      life: 30 + Math.random()*25,
+      r: 2 + Math.random()*3,
+      tone
+    };
+    level.particles.push(p);
+  }
+}
+
+function updateParticles(){
+  const floorY = canvas.height - CFG.floorYPad;
+  for(const p of level.particles){
+    p.vy += 0.45;
+    p.vx *= 0.99;
+    p.vy *= 0.99;
+    p.x += p.vx;
+    p.y += p.vy;
+    if (p.y > floorY){
+      p.y = floorY;
+      p.vy *= -0.25;
+      p.vx *= 0.75;
+    }
+    p.life -= 1;
+  }
+  level.particles = level.particles.filter(p=>p.life>0);
+}
+
+function drawParticles(){
+  for(const p of level.particles){
+    const a = clamp(p.life/50,0,1);
+    if (p.tone==="glass") ctx.fillStyle = `rgba(160,220,255,${0.55*a})`;
+    else ctx.fillStyle = `rgba(255,255,255,${0.20*a})`;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+  }
+}
+
 /* ================== PLAYER ================== */
 let dragging=false;
 let hasLaunched=false;
@@ -231,16 +280,14 @@ let t=0;
 
 const player = { x:0, y:0, vx:0, vy:0, flying:false };
 
-// idle rig (точка опоры кресла)
 const idleRig = { x:0, y:0 };
-
-// пустой стул остаётся после запуска
 const chairEmpty = { x:0, y:0, w:150, h:150 };
 
 function reset(){
   const a = anchorPoint();
   hasLaunched = false;
   dragging = false;
+  camShake = 0;
 
   idleRig.x = a.x;
   idleRig.y = a.y;
@@ -255,8 +302,6 @@ function reset(){
 
   buildLevel();
 }
-
-function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
 
 canvas.addEventListener("mousedown",(e)=>{
   if (hasLaunched) return;
@@ -291,8 +336,6 @@ canvas.addEventListener("mouseup",()=>{
   dragging = false;
 
   const a = anchorPoint();
-
-  // ✅ Как Angry Birds: тянем назад — летит вперёд
   const dx = a.x - player.x;
   const dy = a.y - player.y;
 
@@ -303,6 +346,7 @@ canvas.addEventListener("mouseup",()=>{
     return;
   }
 
+  // ✅ тянем назад -> летит вперёд
   player.vx = dx * CFG.launchK;
   player.vy = dy * CFG.launchK;
   player.flying = true;
@@ -311,17 +355,25 @@ canvas.addEventListener("mouseup",()=>{
 
 document.getElementById("resetBtn").addEventListener("click", reset);
 
-/* ================== PHYSICS & COLLISIONS ================== */
-function rectHitCircle(rect, cx, cy, r){
-  const rx = rect.x - rect.w/2;
-  const ry = rect.y - rect.h/2;
-  const px = clamp(cx, rx, rx+rect.w);
-  const py = clamp(cy, ry, ry+rect.h);
+/* ================== COLLISION HELPERS ================== */
+function circleVsAABB(cx,cy,r, bx,by,bw,bh){
+  // box center bx,by; returns {hit, nx, ny, px, py}
+  const rx = bx - bw/2;
+  const ry = by - bh/2;
+  const px = clamp(cx, rx, rx+bw);
+  const py = clamp(cy, ry, ry+bh);
   const dx = cx - px;
   const dy = cy - py;
-  return (dx*dx + dy*dy) <= r*r;
+  const dist2 = dx*dx + dy*dy;
+  if (dist2 > r*r) return {hit:false};
+
+  const dist = Math.sqrt(dist2) || 0.0001;
+  const nx = dx/dist;
+  const ny = dy/dist;
+  return {hit:true, nx, ny, px, py};
 }
 
+/* ================== PHYSICS ================== */
 function updatePhysics(){
   if (!hasLaunched){
     if (!dragging){
@@ -345,31 +397,66 @@ function updatePhysics(){
     player.y = floorY;
     player.vy = -player.vy * CFG.bounce;
     player.vx *= CFG.friction;
-
     if (Math.abs(player.vx) < 0.25 && Math.abs(player.vy) < 0.25){
       player.flying = false;
     }
   }
 
+  // камера shake
+  if (camShake > 0){
+    camShake *= 0.86;
+    camShakeX = (Math.random()-0.5)*camShake;
+    camShakeY = (Math.random()-0.5)*camShake;
+  } else {
+    camShakeX = camShakeY = 0;
+  }
+
   const r = 26;
+
+  // blocks damage
   for (const b of level.blocks){
     if (b.hp <= 0) continue;
-    if (rectHitCircle(b, player.x, player.y, r)){
-      const dmg = Math.min(35, Math.hypot(player.vx, player.vy) * 1.2);
+
+    const h = circleVsAABB(player.x, player.y, r, b.x,b.y,b.w,b.h);
+    if (!h.hit) continue;
+
+    const speed = Math.hypot(player.vx, player.vy);
+    let dmg = speed * CFG.baseDamage;
+
+    if (b.kind === "glass") dmg *= CFG.glassMul;
+
+    if (b.hp < 999){
       b.hp -= dmg;
-      player.vx *= -0.45;
-      player.vy *= -0.35;
+      spawnParticles(h.px, h.py, CFG.particlesPerHit, b.kind);
+    }
+
+    // bounce reflect по нормали
+    const dot = player.vx*h.nx + player.vy*h.ny;
+    player.vx = player.vx - 1.7*dot*h.nx;
+    player.vy = player.vy - 1.7*dot*h.ny;
+
+    player.vx *= 0.72;
+    player.vy *= 0.72;
+
+    camShake = Math.min(18, camShake + speed * CFG.shakeMul * 25);
+
+    // break
+    if (b.hp <= 0){
+      spawnParticles(b.x, b.y, 22, b.kind);
     }
   }
 
+  // dudes
   for (const d of level.dudes){
     if (!d.alive) continue;
     const dx = player.x - d.x;
     const dy = player.y - d.y;
     if (dx*dx + dy*dy < (d.r + r)*(d.r + r)){
       d.alive = false;
+      spawnParticles(d.x, d.y, 20, "glass");
       player.vx *= -0.25;
       player.vy *= -0.25;
+      camShake = Math.min(18, camShake + 8);
     }
   }
 }
@@ -386,7 +473,7 @@ function drawLaunchLine(){
   ctx.lineTo(player.x,player.y);
   ctx.stroke();
 
-  // стойка (условная)
+  // стойка
   ctx.fillStyle="rgba(255,255,255,0.10)";
   ctx.fillRect(a.x-10, a.y-60, 20, 130);
   ctx.fillStyle="rgba(124,247,255,0.18)";
@@ -396,36 +483,24 @@ function drawLaunchLine(){
 function drawPlayer(){
   const a = anchorPoint();
 
-  // ✅ ДО запуска: idle + качание вперёд/назад (rotation)
+  // ДО запуска: idle + качание вперёд/назад
   if (!hasLaunched){
     t += 1;
-
     const ang = Math.sin(t * CFG.rockSpeed) * (CFG.rockAngleDeg * Math.PI / 180);
-
     const w = 180, h = 180;
 
-    // pivot — точка опоры кресла
     const pivotX = idleRig.x;
     const pivotY = idleRig.y;
 
     ctx.save();
     ctx.translate(pivotX, pivotY);
-
-    // небольшой “боб” (можно убрать если не надо)
-    const bob = Math.abs(Math.sin(t * CFG.rockSpeed)) * 1.5;
-    ctx.translate(0, bob);
-
     ctx.rotate(ang);
-
-    // важная подгонка: где у спрайта “низ кресла”
-    // можно подкрутить 0.62 (примерно 0.58–0.70)
     ctx.drawImage(IMG.idle, -w/2, -h*0.62, w, h);
-
     ctx.restore();
     return;
   }
 
-  // ✅ ПОСЛЕ запуска: пустой стул остаётся
+  // после запуска: пустой стул остаётся
   ctx.drawImage(
     IMG.chair,
     chairEmpty.x-chairEmpty.w/2,
@@ -441,11 +516,20 @@ function drawPlayer(){
 
 function loop(){
   bg();
+
+  ctx.save();
+  ctx.translate(camShakeX, camShakeY);
+
   drawGround();
   drawBlocks();
   drawDudes();
+  drawParticles();
   drawLaunchLine();
   drawPlayer();
+
+  ctx.restore();
+
+  updateParticles();
   updatePhysics();
   requestAnimationFrame(loop);
 }
@@ -469,7 +553,8 @@ function loop(){
       Проверь файлы:<br>
       <code>assets/player/chair.png</code><br>
       <code>assets/player/human_idle.png</code><br>
-      <code>assets/player/human_fly.png</code>
+      <code>assets/player/human_fly.png</code><br>
+      <code>assets/office/beam.png</code> и т.д.
     </div>`
   );
 });
