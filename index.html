@@ -34,7 +34,7 @@
     button:hover{background:rgba(255,255,255,.10)}
     #goal{
       position:fixed; right:14px; top:12px; z-index:10; color:#d7f6ff;
-      width:300px;
+      width:320px;
     }
     #loading {
       position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
@@ -72,8 +72,8 @@
   <div id="goal" class="panel">
     <div class="title">Цель</div>
     <div class="hint">
-      Развали офисный домик из столов/стоек/стекла и мониторов.<br>
-      <b>Готово под менеджера:</b> в коде есть слот <code>manager</code> (пока выключен).
+      Развали офисный домик из стоек/балок/стекла/столов и мониторов.<br>
+      Домик сделан “1×1” и оставляет <b>место под менеджера</b> (готово в коде).
     </div>
   </div>
 
@@ -93,21 +93,24 @@
   <script>
   (() => {
     // ---------------------------
-    // Asset paths (GitHub Pages safe)
+    // Assets (chair.png НЕ используем — чтобы не было "стул на стуле")
     // ---------------------------
     const ASSETS = {
-      chair: "./assets/player/chair.png",
-      humanIdle: "./assets/player/human_idle.png",
-      humanFly: "./assets/player/human_fly.png",
-      beam: "./assets/office/beam.png",
-      pillar: "./assets/office/pillar.png",
-      desk: "./assets/office/desk.png",
-      monitor: "./assets/office/monitor.png",
-      glass: "./assets/office/glass.png",
+      humanIdle: "./assets/player/human_idle.png", // человек на стуле (в одном спрайте)
+      humanFly:  "./assets/player/human_fly.png",  // человек в полёте
+      beam:      "./assets/office/beam.png",
+      pillar:    "./assets/office/pillar.png",
+      desk:      "./assets/office/desk.png",
+      monitor:   "./assets/office/monitor",
+      glass:     "./assets/office/glass.png",
     };
 
+    // monitor path fix (на всякий случай, если ты назвал monitor.png)
+    // если у тебя monitor.png — раскомментируй следующую строку и удали строку monitor выше:
+    ASSETS.monitor = "./assets/office/monitor.png";
+
     // ---------------------------
-    // Canvas setup
+    // Canvas
     // ---------------------------
     const canvas = document.getElementById("c");
     const ctx = canvas.getContext("2d");
@@ -116,7 +119,7 @@
       canvas.height = Math.floor(window.innerHeight * devicePixelRatio);
       ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
     }
-    window.addEventListener("resize", resize);
+    window.addEventListener("resize", () => { resize(); resetWorld(); });
     resize();
 
     // ---------------------------
@@ -135,7 +138,6 @@
         const im = new Image();
         im.onload = () => resolve(im);
         im.onerror = () => reject(new Error("Failed: " + url));
-        // cache-bust in case GH Pages is sticky
         im.src = url + (url.includes("?") ? "&" : "?") + "v=" + Date.now();
       });
     }
@@ -154,143 +156,159 @@
     }
 
     // ---------------------------
-    // Simple physics + objects
+    // Physics
     // ---------------------------
-    const G = 1600;        // gravity px/s^2
-    const AIR = 0.995;     // air drag per frame factor (applied with dt)
-    const RESTITUTION = 0.15;
+    const G = 1700;
+    const AIR = 0.994;
+    const RESTITUTION = 0.16;
 
     const world = {
       groundY: () => window.innerHeight - 18,
-      // launch anchor = point where human sits (not chair base)
-      anchor: { x: 170, y: window.innerHeight - 120 },
-      // seated pose offsets relative to anchor
-      chairPos: { x: 120, y: window.innerHeight - 170 },
-      // state
+
+      // player placement (сделал ближе к центру и крупнее)
+      playerX: 0,
+      playerY: 0,
+
+      // anchor point for slingshot (будет обновляться от сидячего спрайта)
+      anchor: { x: 0, y: 0 },
+
       aiming: false,
       launched: false,
       pointer: { x: 0, y: 0 },
       pull: { x: 0, y: 0 },
-      // projectile
+
       proj: null,
-      // breakables
       parts: [],
-      // manager slot (готово под будущую модельку)
-      manager: null,
+
+      // manager slot (готово под добавление модели менеджера)
+      managerSlot: null,
     };
 
-    function resetWorld(){
-      world.aiming = false;
-      world.launched = false;
-      world.proj = null;
-
-      // rebuild layout (responsive)
-      const W = window.innerWidth;
-      const H = window.innerHeight;
-      world.anchor.x = 190;
-      world.anchor.y = H - 160;
-      world.chairPos.x = 135;
-      world.chairPos.y = H - 230;
-
-      world.parts = buildOfficeLayout();
-      // manager placeholder (пока выключен)
-      world.manager = null;
-    }
-
-    // Hit test point inside rect
     function ptInRect(px,py,r){
       return px>=r.x && px<=r.x+r.w && py>=r.y && py<=r.y+r.h;
     }
-
     function rectsOverlap(a,b){
       return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
     }
 
-    // Build 2-level office "домик" из твоих деталей
+    // ---------------------------
+    // Build a more "1x1" building + space for manager
+    // ---------------------------
     function buildOfficeLayout(){
       const W = window.innerWidth;
       const H = window.innerHeight;
 
-      // Make building bigger if wide screen
-      const scale = Math.max(0.95, Math.min(1.25, W / 1400));
-      const baseX = W - 520*scale;
-      const baseY = H - 330*scale;
+      // gap between player and building (СИЛЬНО меньше, чем было)
+      const GAP = Math.max(160, Math.min(240, W * 0.14));
 
-      // Helpers
+      // building scale (чтобы был "квадратнее" и с запасом под менеджера)
+      const scale = Math.max(1.05, Math.min(1.35, W / 1250));
+
+      // building size target
+      const BW = 520 * scale;
+      const BH = 420 * scale;
+
+      // place building near player
+      const baseX = Math.min(W - BW - 40, world.playerX + 260 + GAP);
+      const baseY = H - BH - 40;
+
       const parts = [];
       const add = (type, x,y,w,h, hp, z=0) => {
         parts.push({
           type, x,y,w,h, hp, maxHp:hp,
           vx:0, vy:0, ang:0, vang:0,
-          broken:false,
-          z
+          broken:false, z
         });
       };
 
-      // Floor platforms (using beam image as platforms)
+      // --- frame: pillars + beams (квадратнее)
       // bottom beam
-      add("beam", baseX+20*scale, baseY+260*scale, 470*scale, 64*scale, 220, 1);
-      // mid beam (floor 2)
-      add("beam", baseX+40*scale, baseY+135*scale, 430*scale, 64*scale, 220, 1);
-      // top beam (roof)
-      add("beam", baseX+55*scale, baseY+20*scale, 400*scale, 64*scale, 1, 1);
+      add("beam",   baseX + 40*scale, baseY + 340*scale, 440*scale, 64*scale, 260, 1);
+      // mid beam
+      add("beam",   baseX + 60*scale, baseY + 210*scale, 400*scale, 64*scale, 260, 1);
+      // top beam/roof
+      add("beam",   baseX + 80*scale, baseY +  80*scale, 360*scale, 64*scale, 260, 1);
 
-      // Pillars (4)
-      add("pillar", baseX+35*scale, baseY+160*scale, 80*scale, 170*scale, 320, 0);
-      add("pillar", baseX+420*scale, baseY+160*scale, 80*scale, 170*scale, 320, 0);
-      add("pillar", baseX+60*scale, baseY+35*scale, 80*scale, 170*scale, 320, 0);
-      add("pillar", baseX+395*scale, baseY+35*scale, 80*scale, 170*scale, 320, 0);
+      // pillars (4)
+      add("pillar", baseX + 55*scale, baseY + 235*scale, 80*scale, 170*scale, 360, 0);
+      add("pillar", baseX + 405*scale,baseY + 235*scale, 80*scale, 170*scale, 360, 0);
+      add("pillar", baseX + 75*scale, baseY + 105*scale, 80*scale, 170*scale, 360, 0);
+      add("pillar", baseX + 385*scale,baseY + 105*scale, 80*scale, 170*scale, 360, 0);
 
-      // Glass panel (upper)
-      add("glass", baseX+140*scale, baseY+55*scale, 260*scale, 110*scale, 140, 2);
+      // glass in the center (upper)
+      add("glass",  baseX + 160*scale, baseY + 120*scale, 240*scale, 110*scale, 160, 2);
 
-      // Desks + monitors (lower level)
-      add("desk", baseX+110*scale, baseY+190*scale, 170*scale, 100*scale, 170, 2);
-      add("monitor", baseX+140*scale, baseY+165*scale, 120*scale, 70*scale, 90, 3);
+      // desks + monitors (lower floor) — оставляем центр чуть свободнее
+      add("desk",   baseX + 95*scale,  baseY + 260*scale, 170*scale, 105*scale, 190, 2);
+      add("monitor",baseX + 125*scale, baseY + 232*scale, 115*scale, 70*scale,  95, 3);
 
-      add("desk", baseX+270*scale, baseY+190*scale, 170*scale, 100*scale, 170, 2);
-      add("monitor", baseX+300*scale, baseY+165*scale, 120*scale, 70*scale, 90, 3);
+      add("desk",   baseX + 255*scale, baseY + 260*scale, 170*scale, 105*scale, 190, 2);
+      add("monitor",baseX + 285*scale, baseY + 232*scale, 115*scale, 70*scale,  95, 3);
 
-      // Upper desks + monitors
-      add("desk", baseX+145*scale, baseY+85*scale, 150*scale, 90*scale, 160, 2);
-      add("monitor", baseX+165*scale, baseY+63*scale, 105*scale, 60*scale, 90, 3);
+      // upper desks + monitors (смещаем вправо, чтобы слева был "менеджер-спот")
+      add("desk",   baseX + 245*scale, baseY + 145*scale, 165*scale, 95*scale,  180, 2);
+      add("monitor",baseX + 275*scale, baseY + 118*scale, 110*scale, 65*scale,   95, 3);
 
-      add("desk", baseX+285*scale, baseY+85*scale, 150*scale, 90*scale, 160, 2);
-      add("monitor", baseX+305*scale, baseY+63*scale, 105*scale, 60*scale, 90, 3);
+      // Manager platform/space (реальное место под менеджера)
+      // небольшая "полка" слева сверху — менеджер будет стоять/сидеть тут
+      add("beam",   baseX + 95*scale, baseY + 140*scale, 130*scale, 52*scale, 200, 1);
 
-      // (готово под менеджера) — место под будущий спрайт
-      // world.manager = { x: baseX+95*scale, y: baseY+65*scale, w: 90*scale, h: 120*scale, hp: 250 };
+      // slot rect for future manager sprite (не рисуем менеджера, но место есть)
+      world.managerSlot = {
+        x: baseX + 110*scale,
+        y: baseY + 70*scale,
+        w: 110*scale,
+        h: 130*scale,
+        hp: 9999
+      };
 
       return parts;
     }
 
-    // Damage + simple break physics
     function applyHit(part, impulse){
       if (part.broken) return;
-      const dmg = Math.max(8, impulse * 0.12);
+      const dmg = Math.max(10, impulse * 0.13);
       part.hp -= dmg;
       if (part.hp <= 0){
         part.broken = true;
-        // give it a little kick
-        part.vx += (Math.random()*2-1) * 160;
-        part.vy -= 140 + Math.random()*120;
-        part.vang += (Math.random()*2-1) * 2.2;
+        part.vx += (Math.random()*2-1) * 180;
+        part.vy -= 160 + Math.random()*120;
+        part.vang += (Math.random()*2-1) * 2.4;
       }
     }
 
     // ---------------------------
-    // Launch system
+    // Player (сильно больше)
     // ---------------------------
-    function seatedHumanRect(){
-      // Where we click (around human_idle)
-      // We draw human_idle centered near anchor but offset to look seated.
-      const w = 110, h = 110;
-      return { x: world.anchor.x - 40, y: world.anchor.y - 80, w, h };
+    const PLAYER_SCALE = 1.75; // ← существенно больше
+    function seatedRect(){
+      // click area around seated sprite
+      const w = 120 * PLAYER_SCALE;
+      const h = 120 * PLAYER_SCALE;
+      return { x: world.playerX, y: world.playerY, w, h };
     }
 
+    function resetWorld(){
+      const W = window.innerWidth;
+      const H = window.innerHeight;
+
+      world.aiming = false;
+      world.launched = false;
+      world.proj = null;
+
+      // player position closer to center and higher
+      world.playerX = Math.max(40, Math.min(180, W * 0.09));
+      world.playerY = H - (170 * PLAYER_SCALE) - 40;
+
+      world.parts = buildOfficeLayout();
+    }
+
+    // ---------------------------
+    // Slingshot control (тянем назад -> летим вперед)
+    // ---------------------------
     function startAiming(px,py){
       if (world.launched) return;
-      const r = seatedHumanRect();
+      const r = seatedRect();
       if (!ptInRect(px,py,r)) return;
       world.aiming = true;
       world.pointer.x = px;
@@ -299,8 +317,8 @@
     }
 
     function updatePull(){
-      // pull vector = anchor - pointer  (ВАЖНО: именно так, чтобы тянем назад => летим вперёд)
-      const maxLen = 190;
+      const maxLen = 220;
+      // ВАЖНО: anchor - pointer (так направление правильное)
       const dx = world.anchor.x - world.pointer.x;
       const dy = world.anchor.y - world.pointer.y;
       const len = Math.hypot(dx,dy) || 1;
@@ -313,28 +331,23 @@
       if (!world.aiming) return;
       world.aiming = false;
 
-      // Launch projectile
-      const power = 8.2; // tweak
+      const power = 8.6;
       const vx = world.pull.x * power;
       const vy = world.pull.y * power;
 
-      // Spawn projectile at anchor (slightly forward so it doesn't instantly collide with chair)
       world.proj = {
-        x: world.anchor.x + 8,
+        x: world.anchor.x + 10,
         y: world.anchor.y - 10,
-        r: 28,
+        r: 34 * PLAYER_SCALE,
         vx, vy,
         alive: true
       };
       world.launched = true;
     }
 
-    // pointer events
     function getPos(e){
       const rect = canvas.getBoundingClientRect();
-      const x = (e.clientX - rect.left);
-      const y = (e.clientY - rect.top);
-      return {x,y};
+      return { x: (e.clientX - rect.left), y: (e.clientY - rect.top) };
     }
 
     canvas.addEventListener("pointerdown", (e) => {
@@ -354,57 +367,81 @@
     document.getElementById("resetBtn").addEventListener("click", resetWorld);
 
     // ---------------------------
-    // Rendering helpers
+    // Draw
     // ---------------------------
     function drawBackground(){
       const W = window.innerWidth, H = window.innerHeight;
       const g = ctx.createRadialGradient(W*0.2,H*0.2,50, W*0.2,H*0.2, Math.max(W,H));
-      g.addColorStop(0, "rgba(30,120,200,0.22)");
-      g.addColorStop(0.35, "rgba(7,18,38,0.80)");
+      g.addColorStop(0, "rgba(30,120,200,0.26)");
+      g.addColorStop(0.35, "rgba(7,18,38,0.82)");
       g.addColorStop(1, "rgba(0,0,0,0.92)");
       ctx.fillStyle = g;
       ctx.fillRect(0,0,W,H);
 
-      // ground line
       ctx.fillStyle = "rgba(255,255,255,0.08)";
       ctx.fillRect(0, world.groundY(), W, 2);
     }
 
-    function drawImageFit(im, x,y,w,h){
-      ctx.drawImage(im, x,y,w,h);
+    function drawImageFit(im, x,y,w,h){ ctx.drawImage(im, x,y,w,h); }
+
+    function drawOffice(){
+      const parts = [...world.parts].sort((a,b)=>a.z-b.z);
+      for (const it of parts){
+        const im = img[it.type];
+        if (!im) continue;
+
+        ctx.save();
+        if (it.broken){
+          ctx.translate(it.x + it.w/2, it.y + it.h/2);
+          ctx.rotate(it.ang);
+          ctx.translate(-(it.x + it.w/2), -(it.y + it.h/2));
+        }
+        drawImageFit(im, it.x, it.y, it.w, it.h);
+
+        const hpRatio = Math.max(0, it.hp / it.maxHp);
+        if (!it.broken && hpRatio < 0.55){
+          ctx.fillStyle = `rgba(255,80,120,${(0.55-hpRatio)*0.18})`;
+          ctx.fillRect(it.x, it.y, it.w, it.h);
+        }
+        ctx.restore();
+      }
+
+      // manager slot (место есть, но менеджера пока нет)
+      if (world.managerSlot){
+        ctx.save();
+        ctx.globalAlpha = 0.0; // ← не показываем рамку, но слот существует
+        ctx.fillStyle = "rgba(255,255,255,0.06)";
+        ctx.fillRect(world.managerSlot.x, world.managerSlot.y, world.managerSlot.w, world.managerSlot.h);
+        ctx.restore();
+      }
     }
 
-    function drawChairEmpty(){
-      // chair.png only once
-      const im = img.chair;
-      const w = 120, h = 120;
-      // we place chair base and let human_idle sit above it
-      drawImageFit(im, world.chairPos.x, world.chairPos.y, w, h);
-    }
-
-    // seated human rocking forward/back like you asked (вперёд/назад)
+    // сидячий спрайт (он уже со стулом) + качание вперед/назад
     function drawSeatedHuman(t){
-      if (world.launched) return; // when launched, seated human disappears
-      const im = img.humanIdle;
-      const baseX = world.chairPos.x + 22;
-      const baseY = world.chairPos.y - 12;
+      if (world.launched) return;
 
-      // rocking animation
-      const rock = Math.sin(t*2.4) * 0.12; // radians
-      const bob = Math.sin(t*3.2) * 2.2;
+      const im = img.humanIdle;
+
+      const w = 140 * PLAYER_SCALE;
+      const h = 140 * PLAYER_SCALE;
+
+      const x = world.playerX;
+      const y = world.playerY;
+
+      // качание вперед/назад (rotate around bottom)
+      const rock = Math.sin(t*2.2) * 0.14;
+      const bob  = Math.sin(t*3.1) * 2.4;
 
       ctx.save();
-      // pivot around hips
-      ctx.translate(baseX + 40, baseY + 60);
+      ctx.translate(x + w*0.45, y + h*0.80);
       ctx.rotate(rock);
-      ctx.translate(-(baseX + 40), -(baseY + 60));
-      ctx.globalAlpha = 1;
-      drawImageFit(im, baseX, baseY + bob, 95, 95);
+      ctx.translate(-(x + w*0.45), -(y + h*0.80));
+      drawImageFit(im, x, y + bob, w, h);
       ctx.restore();
 
-      // update anchor roughly where we click/launch from
-      world.anchor.x = baseX + 55;
-      world.anchor.y = baseY + 55;
+      // anchor point (где тянем/откуда летим)
+      world.anchor.x = x + w*0.62;
+      world.anchor.y = y + h*0.50;
     }
 
     function drawAimBand(){
@@ -416,89 +453,47 @@
       const py = ay - world.pull.y;
 
       ctx.lineCap = "round";
-      // outer glow
       ctx.strokeStyle = "rgba(120,240,255,0.20)";
-      ctx.lineWidth = 10;
+      ctx.lineWidth = 12;
       ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(px,py); ctx.stroke();
 
-      // core
-      ctx.strokeStyle = "rgba(255,80,120,0.85)";
+      ctx.strokeStyle = "rgba(255,80,120,0.88)";
       ctx.lineWidth = 3;
       ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(px,py); ctx.stroke();
 
-      // pull circle
       ctx.fillStyle = "rgba(120,240,255,0.12)";
-      ctx.strokeStyle = "rgba(120,240,255,0.8)";
+      ctx.strokeStyle = "rgba(120,240,255,0.85)";
       ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(px,py,18,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(px,py,20,0,Math.PI*2); ctx.fill(); ctx.stroke();
     }
 
     function drawProjectile(){
       if (!world.proj) return;
       const p = world.proj;
 
-      // flying sprite
       const im = img.humanFly;
+      const size = 150 * PLAYER_SCALE;
+
       ctx.save();
-      // rotate by velocity for fun
       const ang = Math.atan2(p.vy, p.vx);
       ctx.translate(p.x, p.y);
       ctx.rotate(ang);
       ctx.translate(-p.x, -p.y);
-      drawImageFit(im, p.x-42, p.y-42, 95, 95);
+      drawImageFit(im, p.x - size*0.50, p.y - size*0.50, size, size);
       ctx.restore();
     }
 
-    function drawOffice(){
-      // sort by z to layer
-      const parts = [...world.parts].sort((a,b)=>a.z-b.z);
-      for (const it of parts){
-        const im = img[it.type];
-        if (!im) continue;
-
-        ctx.save();
-        // broken pieces rotate a bit
-        if (it.broken){
-          ctx.translate(it.x + it.w/2, it.y + it.h/2);
-          ctx.rotate(it.ang);
-          ctx.translate(-(it.x + it.w/2), -(it.y + it.h/2));
-          ctx.globalAlpha = 0.98;
-        }
-        drawImageFit(im, it.x, it.y, it.w, it.h);
-
-        // subtle HP tint when damaged
-        const hpRatio = Math.max(0, it.hp / it.maxHp);
-        if (!it.broken && hpRatio < 0.55){
-          ctx.fillStyle = `rgba(255,80,120,${(0.55-hpRatio)*0.18})`;
-          ctx.fillRect(it.x, it.y, it.w, it.h);
-        }
-        ctx.restore();
-      }
-
-      // manager placeholder (готово под добавление)
-      if (world.manager){
-        ctx.fillStyle = "rgba(255,255,255,0.06)";
-        ctx.fillRect(world.manager.x, world.manager.y, world.manager.w, world.manager.h);
-        ctx.strokeStyle = "rgba(140,220,255,0.25)";
-        ctx.strokeRect(world.manager.x, world.manager.y, world.manager.w, world.manager.h);
-        ctx.fillStyle = "rgba(215,246,255,0.7)";
-        ctx.font = "12px system-ui";
-        ctx.fillText("MANAGER SLOT", world.manager.x+8, world.manager.y+18);
-      }
-    }
-
     // ---------------------------
-    // Simulation step
+    // Step
     // ---------------------------
     function step(dt){
       const ground = world.groundY();
 
-      // projectile physics
       if (world.proj){
         const p = world.proj;
 
         p.vy += G * dt;
-        // air
+
         const drag = Math.pow(AIR, dt*60);
         p.vx *= drag;
         p.vy *= drag;
@@ -509,41 +504,37 @@
         // ground bounce
         if (p.y + p.r > ground){
           p.y = ground - p.r;
-          p.vy = -p.vy * (0.25 + RESTITUTION);
-          p.vx *= 0.7;
-          // stop if slow
+          p.vy = -p.vy * (0.24 + RESTITUTION);
+          p.vx *= 0.72;
           if (Math.abs(p.vy) < 120) p.vy = 0;
           if (Math.abs(p.vx) < 40) p.vx = 0;
         }
 
-        // collide with office parts
+        // collisions with building parts
         const projRect = { x: p.x - p.r, y: p.y - p.r, w: p.r*2, h: p.r*2 };
         for (const it of world.parts){
           const r = { x: it.x, y: it.y, w: it.w, h: it.h };
-          if (rectsOverlap(projRect, r)){
-            const impulse = Math.hypot(p.vx, p.vy);
-            applyHit(it, impulse);
+          if (!rectsOverlap(projRect, r)) continue;
 
-            // simple bounce response (push projectile out)
-            // determine smallest overlap axis
-            const ox = Math.min(projRect.x+projRect.w - r.x, r.x+r.w - projRect.x);
-            const oy = Math.min(projRect.y+projRect.h - r.y, r.y+r.h - projRect.y);
-            if (ox < oy){
-              // horizontal resolve
-              if (p.x < it.x + it.w/2) p.x -= ox; else p.x += ox;
-              p.vx = -p.vx * (0.30 + RESTITUTION);
-              p.vy *= 0.92;
-            } else {
-              if (p.y < it.y + it.h/2) p.y -= oy; else p.y += oy;
-              p.vy = -p.vy * (0.30 + RESTITUTION);
-              p.vx *= 0.92;
-            }
+          const impulse = Math.hypot(p.vx, p.vy);
+          applyHit(it, impulse);
 
-            // give part some motion if broken
-            if (it.broken){
-              it.vx += p.vx * 0.02;
-              it.vy += p.vy * 0.02;
-            }
+          const ox = Math.min(projRect.x+projRect.w - r.x, r.x+r.w - projRect.x);
+          const oy = Math.min(projRect.y+projRect.h - r.y, r.y+r.h - projRect.y);
+
+          if (ox < oy){
+            if (p.x < it.x + it.w/2) p.x -= ox; else p.x += ox;
+            p.vx = -p.vx * (0.30 + RESTITUTION);
+            p.vy *= 0.92;
+          } else {
+            if (p.y < it.y + it.h/2) p.y -= oy; else p.y += oy;
+            p.vy = -p.vy * (0.30 + RESTITUTION);
+            p.vx *= 0.92;
+          }
+
+          if (it.broken){
+            it.vx += p.vx * 0.02;
+            it.vy += p.vy * 0.02;
           }
         }
       }
@@ -557,7 +548,6 @@
         it.y += it.vy * dt;
         it.ang += it.vang * dt;
 
-        // floor collision
         if (it.y + it.h > ground){
           it.y = ground - it.h;
           it.vy = -it.vy * 0.18;
@@ -570,7 +560,7 @@
     }
 
     // ---------------------------
-    // Main loop
+    // Loop
     // ---------------------------
     let last = performance.now();
     function loop(now){
@@ -579,26 +569,20 @@
 
       step(dt);
 
-      // draw
       drawBackground();
       drawOffice();
-      drawChairEmpty();     // chair stays (empty)
-      drawSeatedHuman(now/1000); // idle human (only before launch)
+      drawSeatedHuman(now/1000);
       drawAimBand();
       drawProjectile();
 
       requestAnimationFrame(loop);
     }
 
-    // Boot
     preload()
-      .then(() => {
-        resetWorld();
-        requestAnimationFrame(loop);
-      })
+      .then(() => { resetWorld(); requestAnimationFrame(loop); })
       .catch(err => {
         console.error(err);
-        alert("Ошибка загрузки PNG. Проверь пути в репозитории и имена файлов.\n\n" + err.message);
+        alert("Ошибка загрузки PNG. Проверь пути/имена.\n\n" + err.message);
       });
 
   })();
