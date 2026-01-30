@@ -5,720 +5,603 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Office Birds — Level 1</title>
   <style>
-    html, body { margin:0; height:100%; background:#061322; overflow:hidden; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
-    canvas { display:block; width:100vw; height:100vh; }
-    .hud{
-      position:fixed; left:14px; top:12px; display:flex; gap:10px; align-items:flex-start;
-      color:#d8f3ff;
-      user-select:none;
+    html,body{height:100%;margin:0;background:#050914;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    #ui {
+      position:fixed; left:14px; top:12px; z-index:10; color:#d7f6ff;
+      display:flex; gap:10px; align-items:flex-start;
     }
-    .card{
-      background:rgba(10,20,32,.62);
+    .panel{
+      background:rgba(20,28,40,.62);
+      border:1px solid rgba(140,220,255,.18);
+      box-shadow:0 10px 30px rgba(0,0,0,.35);
+      border-radius:12px; padding:10px 12px; backdrop-filter: blur(8px);
+      max-width:520px;
+    }
+    .badge{
+      display:inline-flex; align-items:center; gap:8px;
+      font-size:12px; font-weight:700; letter-spacing:.3px;
+      padding:4px 8px; border-radius:999px;
+      border:1px solid rgba(140,220,255,.25);
+      background:rgba(0,0,0,.18)
+    }
+    .title{font-weight:800;margin:2px 0 6px 0;font-size:14px}
+    .hint{opacity:.92;font-size:12px;line-height:1.25}
+    button{
+      cursor:pointer; border-radius:10px; border:1px solid rgba(140,220,255,.25);
+      background:rgba(255,255,255,.06); color:#d7f6ff;
+      padding:8px 12px; font-weight:700;
+    }
+    button:hover{background:rgba(255,255,255,.10)}
+    #goal{
+      position:fixed; right:14px; top:12px; z-index:10; color:#d7f6ff;
+      width:300px;
+    }
+    #loading {
+      position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+      background:radial-gradient(1200px 700px at 20% 20%, rgba(0,140,255,.25), rgba(0,0,0,.65));
+      z-index:20; color:#d7f6ff;
+    }
+    .loadbox{
+      width:min(560px,92vw);
+      background:rgba(10,16,26,.72);
       border:1px solid rgba(140,220,255,.18);
       border-radius:14px;
-      box-shadow: 0 10px 28px rgba(0,0,0,.35);
-      padding:10px 12px;
-      backdrop-filter: blur(8px);
+      padding:14px 16px;
+      box-shadow:0 18px 45px rgba(0,0,0,.45);
+      backdrop-filter: blur(10px);
     }
-    .pill{
-      display:inline-flex; align-items:center; gap:8px;
-      padding:4px 10px; border-radius:999px;
-      border:1px solid rgba(140,220,255,.18);
-      background:rgba(4,10,16,.35);
-      font-weight:600; font-size:12px;
-    }
-    .title{ font-weight:800; font-size:14px; margin:0 0 6px 0; }
-    .hint{ font-size:12px; opacity:.9; line-height:1.35; max-width:360px; }
-    button{
-      cursor:pointer;
-      border-radius:12px; border:1px solid rgba(140,220,255,.22);
-      padding:8px 12px; background:rgba(20,40,60,.55);
-      color:#e8fbff; font-weight:700;
-    }
-    button:hover{ background:rgba(20,50,80,.7); }
-    .rightHud{
-      position:fixed; right:14px; top:12px; color:#d8f3ff;
-      user-select:none;
-    }
-    .small{ font-size:12px; opacity:.9; }
+    .bar{height:10px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:10px}
+    .bar > div{height:100%;width:0%;background:linear-gradient(90deg,#7efcff,#5aa8ff)}
+    .small{font-size:12px;opacity:.9;margin-top:8px;line-height:1.25}
+    canvas{display:block;width:100vw;height:100vh}
   </style>
 </head>
 <body>
-  <div class="hud">
-    <div class="card">
-      <div class="pill">LEVEL 1</div>
+  <div id="ui">
+    <div class="panel">
+      <div class="badge">LEVEL 1</div>
       <div class="title">Office Birds</div>
       <div class="hint">
-        Зажми на <b>человеке на стуле</b> → потяни <b>назад</b> → отпусти.<br/>
-        Качание: вперёд-назад, пока не трогаешь.<br/>
-        Урон зависит от скорости удара.
+        Зажми на <b>человечке</b> → потяни <b>назад</b> → отпусти.<br>
+        Чем сильнее натяжка, тем дальше полёт.
       </div>
     </div>
     <button id="resetBtn">Reset</button>
   </div>
 
-  <div class="rightHud">
-    <div class="card">
-      <div class="title">Цель</div>
-      <div class="small">Развали офисный домик и “рабов в наушниках”.</div>
-      <div class="small">Менеджер добавится позже (код уже готов).</div>
+  <div id="goal" class="panel">
+    <div class="title">Цель</div>
+    <div class="hint">
+      Развали офисный домик из столов/стоек/стекла и мониторов.<br>
+      <b>Готово под менеджера:</b> в коде есть слот <code>manager</code> (пока выключен).
+    </div>
+  </div>
+
+  <div id="loading">
+    <div class="loadbox">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center">
+        <div style="font-weight:800">Грузим офисный цирк…</div>
+        <div id="pct" style="opacity:.9">0%</div>
+      </div>
+      <div class="bar"><div id="bar"></div></div>
+      <div class="small" id="files"></div>
     </div>
   </div>
 
   <canvas id="c"></canvas>
 
-<script>
-(() => {
-  // =========================
-  // Canvas / DPI
-  // =========================
-  const canvas = document.getElementById('c');
-  const ctx = canvas.getContext('2d');
+  <script>
+  (() => {
+    // ---------------------------
+    // Asset paths (GitHub Pages safe)
+    // ---------------------------
+    const ASSETS = {
+      chair: "./assets/player/chair.png",
+      humanIdle: "./assets/player/human_idle.png",
+      humanFly: "./assets/player/human_fly.png",
+      beam: "./assets/office/beam.png",
+      pillar: "./assets/office/pillar.png",
+      desk: "./assets/office/desk.png",
+      monitor: "./assets/office/monitor.png",
+      glass: "./assets/office/glass.png",
+    };
 
-  let W = 0, H = 0, DPR = 1;
-  function resize(){
-    DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-    W = Math.floor(innerWidth);
-    H = Math.floor(innerHeight);
-    canvas.width = Math.floor(W * DPR);
-    canvas.height = Math.floor(H * DPR);
-    canvas.style.width = W + 'px';
-    canvas.style.height = H + 'px';
-    ctx.setTransform(DPR,0,0,DPR,0,0);
-  }
-  addEventListener('resize', resize);
-  resize();
-
-  // =========================
-  // Helpers
-  // =========================
-  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
-  const len2 = (x,y)=>Math.hypot(x,y);
-  const now = () => performance.now();
-
-  function roundedRect(x,y,w,h,r){
-    ctx.beginPath();
-    const rr = Math.min(r, w/2, h/2);
-    ctx.moveTo(x+rr,y);
-    ctx.arcTo(x+w,y,x+w,y+h,rr);
-    ctx.arcTo(x+w,y+h,x,y+h,rr);
-    ctx.arcTo(x,y+h,x,y,rr);
-    ctx.arcTo(x,y,x+w,y,rr);
-    ctx.closePath();
-  }
-
-  // =========================
-  // Assets
-  // =========================
-  const IMG = {};
-  function loadImg(key, src){
-    return new Promise((res) => {
-      const im = new Image();
-      im.onload = () => { IMG[key]=im; res(true); };
-      im.onerror = () => { console.warn('IMG FAIL', src); res(false); };
-      im.src = src + (src.includes('?') ? '&' : '?') + 'v=' + Date.now();
-    });
-  }
-
-  // IMPORTANT: относительные пути для GitHub Pages
-  const ASSETS = {
-    chair:   'assets/player/chair.png',
-    idle:    'assets/player/human_idle.png',
-    fly:     'assets/player/human_fly.png',
-
-    pillar:  'assets/office/pillar.png',
-    beam:    'assets/office/beam.png',
-    glass:   'assets/office/glass.png',
-    desk:    'assets/office/desk.png',
-    monitor: 'assets/office/monitor.png',
-
-    // менеджера нарисуешь позже — просто положишь сюда:
-    manager: 'assets/office/manager.png',
-  };
-
-  // =========================
-  // Level definition (готово под менеджера)
-  // =========================
-  // type: 'pillar'|'beam'|'glass'|'desk'|'monitor'|'manager'
-  // hp: прочность, breakAt: порог удара для "моментального" разрушения (например стекло)
-  const LEVEL_1 = {
-    ground: { y: null }, // рассчитаем от H
-    slingshot: { x: 170, y: null },
-
-    // Офисный домик: колонны + балки + стекло + столы + мониторы
-    objects: [
-      // Нижний ряд (2 колонны + балка)
-      { type:'pillar',  x: 0.78, y: 0.78, w: 90,  h: 240, hp: 220 },
-      { type:'pillar',  x: 0.90, y: 0.78, w: 90,  h: 240, hp: 220 },
-      { type:'beam',    x: 0.84, y: 0.71, w: 360, h: 44,  hp: 180 },
-
-      // Средний ряд: стекло + стол + монитор
-      { type:'glass',   x: 0.84, y: 0.64, w: 340, h: 18,  hp: 60, breakAt: 7.5 },
-      { type:'desk',    x: 0.84, y: 0.60, w: 300, h: 150, hp: 140 },
-      { type:'monitor', x: 0.88, y: 0.55, w: 150, h: 90,  hp: 70 },
-
-      // Верхний ряд (2 колонны + балка + стекло)
-      { type:'pillar',  x: 0.80, y: 0.53, w: 70,  h: 180, hp: 180 },
-      { type:'pillar',  x: 0.88, y: 0.53, w: 70,  h: 180, hp: 180 },
-      { type:'beam',    x: 0.84, y: 0.46, w: 320, h: 40,  hp: 160 },
-      { type:'glass',   x: 0.84, y: 0.41, w: 300, h: 16,  hp: 55, breakAt: 7.5 },
-
-      // Заглушка под менеджера (появится позже)
-      // Поставим его на средний этаж рядом со столом
-      { type:'manager', x: 0.79, y: 0.58, w: 70, h: 110, hp: 9999, static: true },
-    ]
-  };
-
-  // =========================
-  // Simple physics objects
-  // =========================
-  // Мы делаем “приятную” псевдо-физику без тяжёлого движка:
-  // - гравитация
-  // - простые AABB столкновения
-  // - урон от скорости в момент удара
-  const GRAV = 1600; // px/s^2
-  const FRICTION = 0.985;
-  const RESTITUTION = 0.35;
-
-  class Body {
-    constructor(opts){
-      Object.assign(this, {
-        type: 'unknown',
-        x: 0, y: 0, w: 60, h: 60,
-        vx: 0, vy: 0,
-        angle: 0, angV: 0,
-        hp: 100,
-        breakAt: null,
-        static: false,
-        dead: false,
-        imgKey: null,
-        tag: '',
-      }, opts);
-      this.baseHp = this.hp;
+    // ---------------------------
+    // Canvas setup
+    // ---------------------------
+    const canvas = document.getElementById("c");
+    const ctx = canvas.getContext("2d");
+    function resize(){
+      canvas.width = Math.floor(window.innerWidth * devicePixelRatio);
+      canvas.height = Math.floor(window.innerHeight * devicePixelRatio);
+      ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
     }
-    aabb(){
-      return { x:this.x - this.w/2, y:this.y - this.h/2, w:this.w, h:this.h };
-    }
-  }
+    window.addEventListener("resize", resize);
+    resize();
 
-  // =========================
-  // Player: chair + human
-  // =========================
-  const player = {
-    chair: { x: 170, y: 0, w: 120, h: 120 },
-    seated: true,  // человек сидит
-    flying: false, // человек в полёте
-    // позы/качание
-    rockT: 0,
-    rockAmp: 0.14, // амплитуда качания
-    rockSpeed: 1.7,
+    // ---------------------------
+    // Loader
+    // ---------------------------
+    const loadingEl = document.getElementById("loading");
+    const pctEl = document.getElementById("pct");
+    const barEl = document.getElementById("bar");
+    const filesEl = document.getElementById("files");
 
-    // slingshot
-    drag: { active:false, sx:0, sy:0, mx:0, my:0 },
-    anchor: { x: 170, y: 0 }, // центр “привязки” для выстрела
+    const img = {};
+    const keys = Object.keys(ASSETS);
 
-    // сам летящий человек как тело
-    body: new Body({ type:'human', x:170, y:0, w:86, h:86, hp:99999, static:false }),
-  };
-
-  // =========================
-  // World
-  // =========================
-  let groundY = 0;
-  let bodies = [];
-  let lastT = now();
-
-  function buildLevel(def){
-    bodies = [];
-    groundY = Math.floor(H * 0.93);
-    const slingY = Math.floor(H * 0.82);
-
-    def.ground.y = groundY;
-    def.slingshot.y = slingY;
-
-    player.chair.x = def.slingshot.x;
-    player.chair.y = slingY + 22;
-
-    player.anchor.x = def.slingshot.x + 8;
-    player.anchor.y = slingY - 16;
-
-    player.seated = true;
-    player.flying = false;
-    player.drag.active = false;
-    player.body.x = player.anchor.x + 38;
-    player.body.y = player.anchor.y + 20;
-    player.body.vx = 0;
-    player.body.vy = 0;
-    player.body.angV = 0;
-    player.body.angle = 0;
-
-    // Создаём офисные объекты
-    for(const o of def.objects){
-      const x = (typeof o.x === 'number' && o.x <= 1) ? Math.floor(W * o.x) : o.x;
-      const y = (typeof o.y === 'number' && o.y <= 1) ? Math.floor(H * o.y) : o.y;
-
-      const b = new Body({
-        type: o.type,
-        x, y,
-        w: o.w, h: o.h,
-        hp: o.hp ?? 100,
-        breakAt: o.breakAt ?? null,
-        static: o.static ?? false,
-        imgKey: o.type, // ключ картинки совпадает с type (pillar/beam/...)
-        tag: o.type,
+    function loadImage(key, url){
+      return new Promise((resolve, reject) => {
+        const im = new Image();
+        im.onload = () => resolve(im);
+        im.onerror = () => reject(new Error("Failed: " + url));
+        // cache-bust in case GH Pages is sticky
+        im.src = url + (url.includes("?") ? "&" : "?") + "v=" + Date.now();
       });
-
-      // небольшой “спавн-джиттер” чтобы не было идеально ровно
-      b.x += (Math.random()-0.5)*2;
-      b.y += (Math.random()-0.5)*2;
-
-      bodies.push(b);
     }
-  }
 
-  // =========================
-  // Collisions (AABB)
-  // =========================
-  function aabbOverlap(a,b){
-    return (a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y);
-  }
-
-  function resolveAABB(moving, other){
-    if(other.dead) return;
-    if(other.static && moving.type !== 'human'){
-      // если другие падают — пусть остаётся, но можно расширять позже
-    }
-    const A = moving.aabb();
-    const B = other.aabb();
-    if(!aabbOverlap(A,B)) return;
-
-    // penetration depths
-    const dx1 = (B.x + B.w) - A.x;
-    const dx2 = (A.x + A.w) - B.x;
-    const dy1 = (B.y + B.h) - A.y;
-    const dy2 = (A.y + A.h) - B.y;
-
-    const penX = Math.min(dx1, dx2);
-    const penY = Math.min(dy1, dy2);
-
-    // ударная скорость
-    const speed = len2(moving.vx, moving.vy);
-
-    if(penX < penY){
-      // push out X
-      if(dx1 < dx2){
-        moving.x += penX;
-      } else {
-        moving.x -= penX;
+    async function preload(){
+      let done = 0;
+      filesEl.textContent = keys.map(k => ASSETS[k]).join("   •   ");
+      for (const k of keys){
+        img[k] = await loadImage(k, ASSETS[k]);
+        done++;
+        const p = Math.round((done/keys.length)*100);
+        pctEl.textContent = p + "%";
+        barEl.style.width = p + "%";
       }
-      moving.vx *= -RESTITUTION;
-    } else {
-      // push out Y
-      if(dy1 < dy2){
-        moving.y += penY;
-      } else {
-        moving.y -= penY;
+      loadingEl.style.display = "none";
+    }
+
+    // ---------------------------
+    // Simple physics + objects
+    // ---------------------------
+    const G = 1600;        // gravity px/s^2
+    const AIR = 0.995;     // air drag per frame factor (applied with dt)
+    const RESTITUTION = 0.15;
+
+    const world = {
+      groundY: () => window.innerHeight - 18,
+      // launch anchor = point where human sits (not chair base)
+      anchor: { x: 170, y: window.innerHeight - 120 },
+      // seated pose offsets relative to anchor
+      chairPos: { x: 120, y: window.innerHeight - 170 },
+      // state
+      aiming: false,
+      launched: false,
+      pointer: { x: 0, y: 0 },
+      pull: { x: 0, y: 0 },
+      // projectile
+      proj: null,
+      // breakables
+      parts: [],
+      // manager slot (готово под будущую модельку)
+      manager: null,
+    };
+
+    function resetWorld(){
+      world.aiming = false;
+      world.launched = false;
+      world.proj = null;
+
+      // rebuild layout (responsive)
+      const W = window.innerWidth;
+      const H = window.innerHeight;
+      world.anchor.x = 190;
+      world.anchor.y = H - 160;
+      world.chairPos.x = 135;
+      world.chairPos.y = H - 230;
+
+      world.parts = buildOfficeLayout();
+      // manager placeholder (пока выключен)
+      world.manager = null;
+    }
+
+    // Hit test point inside rect
+    function ptInRect(px,py,r){
+      return px>=r.x && px<=r.x+r.w && py>=r.y && py<=r.y+r.h;
+    }
+
+    function rectsOverlap(a,b){
+      return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    }
+
+    // Build 2-level office "домик" из твоих деталей
+    function buildOfficeLayout(){
+      const W = window.innerWidth;
+      const H = window.innerHeight;
+
+      // Make building bigger if wide screen
+      const scale = Math.max(0.95, Math.min(1.25, W / 1400));
+      const baseX = W - 520*scale;
+      const baseY = H - 330*scale;
+
+      // Helpers
+      const parts = [];
+      const add = (type, x,y,w,h, hp, z=0) => {
+        parts.push({
+          type, x,y,w,h, hp, maxHp:hp,
+          vx:0, vy:0, ang:0, vang:0,
+          broken:false,
+          z
+        });
+      };
+
+      // Floor platforms (using beam image as platforms)
+      // bottom beam
+      add("beam", baseX+20*scale, baseY+260*scale, 470*scale, 64*scale, 220, 1);
+      // mid beam (floor 2)
+      add("beam", baseX+40*scale, baseY+135*scale, 430*scale, 64*scale, 220, 1);
+      // top beam (roof)
+      add("beam", baseX+55*scale, baseY+20*scale, 400*scale, 64*scale, 1, 1);
+
+      // Pillars (4)
+      add("pillar", baseX+35*scale, baseY+160*scale, 80*scale, 170*scale, 320, 0);
+      add("pillar", baseX+420*scale, baseY+160*scale, 80*scale, 170*scale, 320, 0);
+      add("pillar", baseX+60*scale, baseY+35*scale, 80*scale, 170*scale, 320, 0);
+      add("pillar", baseX+395*scale, baseY+35*scale, 80*scale, 170*scale, 320, 0);
+
+      // Glass panel (upper)
+      add("glass", baseX+140*scale, baseY+55*scale, 260*scale, 110*scale, 140, 2);
+
+      // Desks + monitors (lower level)
+      add("desk", baseX+110*scale, baseY+190*scale, 170*scale, 100*scale, 170, 2);
+      add("monitor", baseX+140*scale, baseY+165*scale, 120*scale, 70*scale, 90, 3);
+
+      add("desk", baseX+270*scale, baseY+190*scale, 170*scale, 100*scale, 170, 2);
+      add("monitor", baseX+300*scale, baseY+165*scale, 120*scale, 70*scale, 90, 3);
+
+      // Upper desks + monitors
+      add("desk", baseX+145*scale, baseY+85*scale, 150*scale, 90*scale, 160, 2);
+      add("monitor", baseX+165*scale, baseY+63*scale, 105*scale, 60*scale, 90, 3);
+
+      add("desk", baseX+285*scale, baseY+85*scale, 150*scale, 90*scale, 160, 2);
+      add("monitor", baseX+305*scale, baseY+63*scale, 105*scale, 60*scale, 90, 3);
+
+      // (готово под менеджера) — место под будущий спрайт
+      // world.manager = { x: baseX+95*scale, y: baseY+65*scale, w: 90*scale, h: 120*scale, hp: 250 };
+
+      return parts;
+    }
+
+    // Damage + simple break physics
+    function applyHit(part, impulse){
+      if (part.broken) return;
+      const dmg = Math.max(8, impulse * 0.12);
+      part.hp -= dmg;
+      if (part.hp <= 0){
+        part.broken = true;
+        // give it a little kick
+        part.vx += (Math.random()*2-1) * 160;
+        part.vy -= 140 + Math.random()*120;
+        part.vang += (Math.random()*2-1) * 2.2;
       }
-      moving.vy *= -RESTITUTION;
-      moving.vx *= 0.96;
     }
 
-    // урон по объектам, если удар сильный
-    if(moving.type === 'human' && speed > 4.2){
-      applyDamage(other, speed);
-    }
-  }
-
-  function applyDamage(target, impactSpeed){
-    if(target.dead) return;
-    if(target.type === 'manager') return; // пока не ломаем менеджера
-
-    // стекло: моментально по порогу
-    if(target.breakAt != null && impactSpeed >= target.breakAt){
-      target.hp = 0;
-    } else {
-      // общий урон: чем выше скорость, тем сильнее
-      const dmg = Math.floor(impactSpeed * 14);
-      target.hp -= dmg;
+    // ---------------------------
+    // Launch system
+    // ---------------------------
+    function seatedHumanRect(){
+      // Where we click (around human_idle)
+      // We draw human_idle centered near anchor but offset to look seated.
+      const w = 110, h = 110;
+      return { x: world.anchor.x - 40, y: world.anchor.y - 80, w, h };
     }
 
-    if(target.hp <= 0){
-      target.dead = true;
-      // эффект "отлёта" для не статичных: сделаем, чтобы немного разлетались
-      // (даже если static=false, у нас псевдо-физика — просто подсдвинем)
-      target.vx += (Math.random()-0.5)*240;
-      target.vy -= 220 - Math.random()*140;
-      target.angV += (Math.random()-0.5)*6;
-      target.static = false;
+    function startAiming(px,py){
+      if (world.launched) return;
+      const r = seatedHumanRect();
+      if (!ptInRect(px,py,r)) return;
+      world.aiming = true;
+      world.pointer.x = px;
+      world.pointer.y = py;
+      updatePull();
     }
-  }
 
-  // =========================
-  // Input: drag & launch
-  // =========================
-  function getMouse(e){
-    const r = canvas.getBoundingClientRect();
-    return { x: (e.clientX - r.left), y: (e.clientY - r.top) };
-  }
+    function updatePull(){
+      // pull vector = anchor - pointer  (ВАЖНО: именно так, чтобы тянем назад => летим вперёд)
+      const maxLen = 190;
+      const dx = world.anchor.x - world.pointer.x;
+      const dy = world.anchor.y - world.pointer.y;
+      const len = Math.hypot(dx,dy) || 1;
+      const k = Math.min(1, maxLen/len);
+      world.pull.x = dx * k;
+      world.pull.y = dy * k;
+    }
 
-  function pointInCircle(px,py, cx,cy, r){
-    const dx=px-cx, dy=py-cy;
-    return dx*dx+dy*dy <= r*r;
-  }
+    function release(){
+      if (!world.aiming) return;
+      world.aiming = false;
 
-  function humanGrabPoint(){
-    // если сидит — хвататься за сидящего (на стуле)
-    // если летит — уже не тянем
-    const hx = player.seated ? (player.chair.x + 26) : player.body.x;
-    const hy = player.seated ? (player.chair.y - 40) : player.body.y;
-    return { x:hx, y:hy };
-  }
+      // Launch projectile
+      const power = 8.2; // tweak
+      const vx = world.pull.x * power;
+      const vy = world.pull.y * power;
 
-  canvas.addEventListener('pointerdown', (e) => {
-    const m = getMouse(e);
-    if(player.flying) return;
+      // Spawn projectile at anchor (slightly forward so it doesn't instantly collide with chair)
+      world.proj = {
+        x: world.anchor.x + 8,
+        y: world.anchor.y - 10,
+        r: 28,
+        vx, vy,
+        alive: true
+      };
+      world.launched = true;
+    }
 
-    const h = humanGrabPoint();
-    if(pointInCircle(m.x,m.y, h.x,h.y, 55)){
-      player.drag.active = true;
-      player.drag.sx = m.x; player.drag.sy = m.y;
-      player.drag.mx = m.x; player.drag.my = m.y;
+    // pointer events
+    function getPos(e){
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left);
+      const y = (e.clientY - rect.top);
+      return {x,y};
+    }
+
+    canvas.addEventListener("pointerdown", (e) => {
       canvas.setPointerCapture(e.pointerId);
-    }
-  });
+      const p = getPos(e);
+      startAiming(p.x,p.y);
+    });
+    canvas.addEventListener("pointermove", (e) => {
+      const p = getPos(e);
+      world.pointer.x = p.x;
+      world.pointer.y = p.y;
+      if (world.aiming) updatePull();
+    });
+    canvas.addEventListener("pointerup", () => release());
+    canvas.addEventListener("pointercancel", () => release());
 
-  canvas.addEventListener('pointermove', (e) => {
-    if(!player.drag.active) return;
-    const m = getMouse(e);
-    player.drag.mx = m.x;
-    player.drag.my = m.y;
-  });
+    document.getElementById("resetBtn").addEventListener("click", resetWorld);
 
-  canvas.addEventListener('pointerup', (e) => {
-    if(!player.drag.active) return;
-    player.drag.active = false;
+    // ---------------------------
+    // Rendering helpers
+    // ---------------------------
+    function drawBackground(){
+      const W = window.innerWidth, H = window.innerHeight;
+      const g = ctx.createRadialGradient(W*0.2,H*0.2,50, W*0.2,H*0.2, Math.max(W,H));
+      g.addColorStop(0, "rgba(30,120,200,0.22)");
+      g.addColorStop(0.35, "rgba(7,18,38,0.80)");
+      g.addColorStop(1, "rgba(0,0,0,0.92)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0,0,W,H);
 
-    // ВАЖНО: тянешь назад -> летит вперёд
-    // вектор: from current pull point to anchor
-    const pullX = player.drag.mx;
-    const pullY = player.drag.my;
-
-    const dx = player.anchor.x - pullX;
-    const dy = player.anchor.y - pullY;
-
-    // ограничение силы
-    const maxPull = 220;
-    const dist = clamp(len2(dx,dy), 0, maxPull);
-
-    const nx = (dist > 0.001) ? dx / (len2(dx,dy) || 1) : 1;
-    const ny = (dist > 0.001) ? dy / (len2(dx,dy) || 1) : 0;
-
-    // старт полёта
-    player.seated = false;
-    player.flying = true;
-
-    // человек улетает от стула, стул остаётся пустым
-    player.body.x = player.anchor.x + 38;
-    player.body.y = player.anchor.y + 10;
-
-    const power = 10.2; // общий множитель (подкрутим потом)
-    player.body.vx = nx * dist * power;
-    player.body.vy = ny * dist * power;
-    player.body.angV = (Math.random()-0.5)*6;
-
-  }, { passive:true });
-
-  // =========================
-  // Reset
-  // =========================
-  document.getElementById('resetBtn').addEventListener('click', () => {
-    buildLevel(LEVEL_1);
-  });
-
-  // =========================
-  // Update
-  // =========================
-  function update(dt){
-    // rocking while seated and not dragging
-    if(player.seated && !player.drag.active){
-      player.rockT += dt;
-    }
-    if(player.drag.active){
-      // при натягивании убираем качание и “отгибаем” позу
-      // (вперёд-назад ты хотел именно это)
-      player.rockT += dt * 0.25;
+      // ground line
+      ctx.fillStyle = "rgba(255,255,255,0.08)";
+      ctx.fillRect(0, world.groundY(), W, 2);
     }
 
-    // flying physics
-    if(player.flying){
-      player.body.vy += GRAV * dt;
-      player.body.x += player.body.vx * dt;
-      player.body.y += player.body.vy * dt;
-
-      player.body.vx *= Math.pow(FRICTION, dt*60);
-      player.body.vy *= Math.pow(FRICTION, dt*60);
-
-      player.body.angle += player.body.angV * dt;
-
-      // ground collide
-      const foot = player.body.y + player.body.h/2;
-      if(foot > groundY){
-        player.body.y = groundY - player.body.h/2;
-        player.body.vy *= -RESTITUTION;
-        player.body.vx *= 0.92;
-
-        // если почти остановился — возвращаем в “сидит”
-        if(Math.abs(player.body.vy) < 140 && Math.abs(player.body.vx) < 140){
-          // оставим как упал (не телепортим), но можешь ресетить
-        }
-      }
-
-      // collide with office objects
-      for(const b of bodies){
-        if(b.dead) continue;
-        resolveAABB(player.body, b);
-      }
+    function drawImageFit(im, x,y,w,h){
+      ctx.drawImage(im, x,y,w,h);
     }
 
-    // simple falling for dead objects (чтобы “ломалось”)
-    for(const b of bodies){
-      if(b.dead && !b.static){
-        b.vy += GRAV * dt;
-        b.x += b.vx * dt;
-        b.y += b.vy * dt;
-        b.angle += b.angV * dt;
-
-        b.vx *= Math.pow(0.99, dt*60);
-        b.vy *= Math.pow(0.99, dt*60);
-        b.angV *= Math.pow(0.985, dt*60);
-
-        const bottom = b.y + b.h/2;
-        if(bottom > groundY){
-          b.y = groundY - b.h/2;
-          b.vy *= -0.25;
-          b.vx *= 0.80;
-          if(Math.abs(b.vy) < 40) b.vy = 0;
-        }
-      }
-    }
-  }
-
-  // =========================
-  // Render
-  // =========================
-  function drawBackground(){
-    // мягкий градиент как на скрине
-    const g = ctx.createRadialGradient(W*0.12, H*0.18, 60, W*0.18, H*0.22, Math.max(W,H)*0.95);
-    g.addColorStop(0, '#113a5f');
-    g.addColorStop(0.35, '#0b2238');
-    g.addColorStop(1, '#06111e');
-    ctx.fillStyle = g;
-    ctx.fillRect(0,0,W,H);
-
-    // ground line
-    ctx.fillStyle = 'rgba(255,255,255,0.06)';
-    ctx.fillRect(0, groundY, W, 3);
-  }
-
-  function drawImgOrFallback(key, x,y,w,h, angle=0, label=''){
-    const im = IMG[key];
-    ctx.save();
-    ctx.translate(x,y);
-    ctx.rotate(angle);
-    if(im){
-      ctx.drawImage(im, -w/2, -h/2, w, h);
-    } else {
-      // fallback shape
-      ctx.fillStyle = 'rgba(255,255,255,0.10)';
-      ctx.strokeStyle = 'rgba(140,220,255,0.25)';
-      ctx.lineWidth = 2;
-      roundedRect(-w/2, -h/2, w, h, 10);
-      ctx.fill();
-      ctx.stroke();
-      if(label){
-        ctx.fillStyle = 'rgba(220,250,255,0.75)';
-        ctx.font = '12px system-ui';
-        ctx.fillText(label, -w/2+10, 0);
-      }
-    }
-    ctx.restore();
-  }
-
-  function drawOffice(){
-    // рисуем “живые” (не dead) сначала, потом dead поверх — чтобы красиво падало
-    const alive = bodies.filter(b => !b.dead);
-    const dead  = bodies.filter(b => b.dead);
-
-    // слои: pillar → beam → desk → glass → monitor → manager
-    const order = { pillar:1, beam:2, desk:3, glass:4, monitor:5, manager:6, unknown:9 };
-    alive.sort((a,b)=>(order[a.type]||9)-(order[b.type]||9));
-
-    for(const b of alive){
-      if(b.type === 'manager'){
-        // менеджер: если картинки нет — рисуем заглушку “человечек”
-        if(IMG.manager){
-          drawImgOrFallback('manager', b.x, b.y, b.w, b.h, b.angle);
-        } else {
-          // заглушка
-          ctx.save();
-          ctx.translate(b.x,b.y);
-          ctx.fillStyle = 'rgba(255,255,255,0.10)';
-          ctx.strokeStyle = 'rgba(140,220,255,0.25)';
-          ctx.lineWidth = 2;
-          roundedRect(-b.w/2, -b.h/2, b.w, b.h, 14);
-          ctx.fill(); ctx.stroke();
-
-          // “голова”
-          ctx.fillStyle = 'rgba(220,250,255,0.9)';
-          ctx.beginPath();
-          ctx.arc(0, -b.h*0.20, 12, 0, Math.PI*2);
-          ctx.fill();
-
-          // “тело”
-          ctx.strokeStyle = 'rgba(220,250,255,0.8)';
-          ctx.lineWidth = 3;
-          ctx.beginPath();
-          ctx.moveTo(0, -b.h*0.08);
-          ctx.lineTo(0, b.h*0.25);
-          ctx.stroke();
-
-          // бейдж “manager”
-          ctx.fillStyle = 'rgba(220,250,255,0.75)';
-          ctx.font = '11px system-ui';
-          ctx.fillText('MANAGER', -b.w/2+10, b.h/2-10);
-          ctx.restore();
-        }
-        continue;
-      }
-
-      drawImgOrFallback(b.imgKey, b.x, b.y, b.w, b.h, b.angle);
+    function drawChairEmpty(){
+      // chair.png only once
+      const im = img.chair;
+      const w = 120, h = 120;
+      // we place chair base and let human_idle sit above it
+      drawImageFit(im, world.chairPos.x, world.chairPos.y, w, h);
     }
 
-    // dead objects (упавшие обломки)
-    for(const b of dead){
-      drawImgOrFallback(b.imgKey, b.x, b.y, b.w, b.h, b.angle);
-    }
-  }
+    // seated human rocking forward/back like you asked (вперёд/назад)
+    function drawSeatedHuman(t){
+      if (world.launched) return; // when launched, seated human disappears
+      const im = img.humanIdle;
+      const baseX = world.chairPos.x + 22;
+      const baseY = world.chairPos.y - 12;
 
-  function drawPlayer(){
-    // стул всегда на месте
-    drawImgOrFallback('chair', player.chair.x, player.chair.y, 140, 140, 0);
+      // rocking animation
+      const rock = Math.sin(t*2.4) * 0.12; // radians
+      const bob = Math.sin(t*3.2) * 2.2;
 
-    // человек:
-    if(player.seated){
-      // качание вперёд-назад
-      const baseX = player.chair.x + 26;
-      const baseY = player.chair.y - 44;
-
-      // качание именно “вперёд-назад”: вращаем вокруг точки сиденья
-      const rock = Math.sin(player.rockT * player.rockSpeed) * player.rockAmp;
-
-      // если тянем — делаем позу “отгибается”
-      let extra = 0;
-      let pullPos = null;
-      if(player.drag.active){
-        // показываем, куда тянем, и отгибаем сильнее в сторону тяги
-        const px = player.drag.mx;
-        const py = player.drag.my;
-        const dx = clamp(px - player.anchor.x, -220, 220);
-        const dy = clamp(py - player.anchor.y, -220, 220);
-        extra = clamp(dx / 220, -1, 1) * 0.40; // поворот по X (вперёд/назад ощущение)
-        pullPos = { x:px, y:py, dx, dy };
-      }
-
-      const ang = rock + extra;
-
-      // рисуем человека (idle)
       ctx.save();
-      ctx.translate(baseX, baseY);
-      ctx.rotate(ang);
-      if(IMG.idle){
-        ctx.drawImage(IMG.idle, -70, -70, 140, 140);
-      } else {
-        // fallback
-        ctx.fillStyle = 'rgba(220,250,255,0.8)';
-        ctx.beginPath(); ctx.arc(0,0,28,0,Math.PI*2); ctx.fill();
-      }
+      // pivot around hips
+      ctx.translate(baseX + 40, baseY + 60);
+      ctx.rotate(rock);
+      ctx.translate(-(baseX + 40), -(baseY + 60));
+      ctx.globalAlpha = 1;
+      drawImageFit(im, baseX, baseY + bob, 95, 95);
       ctx.restore();
 
-      // резинка/линия натягивания (если тянем)
-      if(player.drag.active && pullPos){
-        // точка крепления (anchor) -> точка тяги
-        ctx.lineWidth = 4;
-        ctx.strokeStyle = 'rgba(255,70,120,0.70)';
-        ctx.beginPath();
-        ctx.moveTo(player.anchor.x, player.anchor.y);
-        ctx.lineTo(pullPos.x, pullPos.y);
-        ctx.stroke();
+      // update anchor roughly where we click/launch from
+      world.anchor.x = baseX + 55;
+      world.anchor.y = baseY + 55;
+    }
 
-        // прицел “куда полетит” (вперёд от anchor)
-        const dx = player.anchor.x - pullPos.x;
-        const dy = player.anchor.y - pullPos.y;
-        const dist = clamp(Math.hypot(dx,dy), 0, 220);
-        const nx = dx / (Math.hypot(dx,dy) || 1);
-        const ny = dy / (Math.hypot(dx,dy) || 1);
+    function drawAimBand(){
+      if (!world.aiming) return;
 
-        const aimLen = 220;
-        ctx.lineWidth = 2;
-        ctx.setLineDash([8,8]);
-        ctx.strokeStyle = 'rgba(140,220,255,0.38)';
-        ctx.beginPath();
-        ctx.moveTo(player.anchor.x, player.anchor.y);
-        ctx.lineTo(player.anchor.x + nx*aimLen, player.anchor.y + ny*aimLen);
-        ctx.stroke();
-        ctx.setLineDash([]);
+      const ax = world.anchor.x;
+      const ay = world.anchor.y;
+      const px = ax - world.pull.x;
+      const py = ay - world.pull.y;
+
+      ctx.lineCap = "round";
+      // outer glow
+      ctx.strokeStyle = "rgba(120,240,255,0.20)";
+      ctx.lineWidth = 10;
+      ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(px,py); ctx.stroke();
+
+      // core
+      ctx.strokeStyle = "rgba(255,80,120,0.85)";
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(px,py); ctx.stroke();
+
+      // pull circle
+      ctx.fillStyle = "rgba(120,240,255,0.12)";
+      ctx.strokeStyle = "rgba(120,240,255,0.8)";
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(px,py,18,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    }
+
+    function drawProjectile(){
+      if (!world.proj) return;
+      const p = world.proj;
+
+      // flying sprite
+      const im = img.humanFly;
+      ctx.save();
+      // rotate by velocity for fun
+      const ang = Math.atan2(p.vy, p.vx);
+      ctx.translate(p.x, p.y);
+      ctx.rotate(ang);
+      ctx.translate(-p.x, -p.y);
+      drawImageFit(im, p.x-42, p.y-42, 95, 95);
+      ctx.restore();
+    }
+
+    function drawOffice(){
+      // sort by z to layer
+      const parts = [...world.parts].sort((a,b)=>a.z-b.z);
+      for (const it of parts){
+        const im = img[it.type];
+        if (!im) continue;
+
+        ctx.save();
+        // broken pieces rotate a bit
+        if (it.broken){
+          ctx.translate(it.x + it.w/2, it.y + it.h/2);
+          ctx.rotate(it.ang);
+          ctx.translate(-(it.x + it.w/2), -(it.y + it.h/2));
+          ctx.globalAlpha = 0.98;
+        }
+        drawImageFit(im, it.x, it.y, it.w, it.h);
+
+        // subtle HP tint when damaged
+        const hpRatio = Math.max(0, it.hp / it.maxHp);
+        if (!it.broken && hpRatio < 0.55){
+          ctx.fillStyle = `rgba(255,80,120,${(0.55-hpRatio)*0.18})`;
+          ctx.fillRect(it.x, it.y, it.w, it.h);
+        }
+        ctx.restore();
       }
 
-    } else {
-      // человек в полёте
-      drawImgOrFallback('fly', player.body.x, player.body.y, 140, 140, player.body.angle);
+      // manager placeholder (готово под добавление)
+      if (world.manager){
+        ctx.fillStyle = "rgba(255,255,255,0.06)";
+        ctx.fillRect(world.manager.x, world.manager.y, world.manager.w, world.manager.h);
+        ctx.strokeStyle = "rgba(140,220,255,0.25)";
+        ctx.strokeRect(world.manager.x, world.manager.y, world.manager.w, world.manager.h);
+        ctx.fillStyle = "rgba(215,246,255,0.7)";
+        ctx.font = "12px system-ui";
+        ctx.fillText("MANAGER SLOT", world.manager.x+8, world.manager.y+18);
+      }
     }
-  }
 
-  function draw(){
-    drawBackground();
-    drawOffice();
-    drawPlayer();
-  }
+    // ---------------------------
+    // Simulation step
+    // ---------------------------
+    function step(dt){
+      const ground = world.groundY();
 
-  // =========================
-  // Boot
-  // =========================
-  async function boot(){
-    // грузим всё, включая manager (может быть отсутствует — ок)
-    await Promise.all([
-      loadImg('chair', ASSETS.chair),
-      loadImg('idle',  ASSETS.idle),
-      loadImg('fly',   ASSETS.fly),
+      // projectile physics
+      if (world.proj){
+        const p = world.proj;
 
-      loadImg('pillar',  ASSETS.pillar),
-      loadImg('beam',    ASSETS.beam),
-      loadImg('glass',   ASSETS.glass),
-      loadImg('desk',    ASSETS.desk),
-      loadImg('monitor', ASSETS.monitor),
+        p.vy += G * dt;
+        // air
+        const drag = Math.pow(AIR, dt*60);
+        p.vx *= drag;
+        p.vy *= drag;
 
-      loadImg('manager', ASSETS.manager), // не обязателен
-    ]);
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
 
-    buildLevel(LEVEL_1);
+        // ground bounce
+        if (p.y + p.r > ground){
+          p.y = ground - p.r;
+          p.vy = -p.vy * (0.25 + RESTITUTION);
+          p.vx *= 0.7;
+          // stop if slow
+          if (Math.abs(p.vy) < 120) p.vy = 0;
+          if (Math.abs(p.vx) < 40) p.vx = 0;
+        }
 
-    lastT = now();
-    requestAnimationFrame(loop);
-  }
+        // collide with office parts
+        const projRect = { x: p.x - p.r, y: p.y - p.r, w: p.r*2, h: p.r*2 };
+        for (const it of world.parts){
+          const r = { x: it.x, y: it.y, w: it.w, h: it.h };
+          if (rectsOverlap(projRect, r)){
+            const impulse = Math.hypot(p.vx, p.vy);
+            applyHit(it, impulse);
 
-  function loop(){
-    const t = now();
-    const dt = clamp((t - lastT) / 1000, 0, 0.033);
-    lastT = t;
+            // simple bounce response (push projectile out)
+            // determine smallest overlap axis
+            const ox = Math.min(projRect.x+projRect.w - r.x, r.x+r.w - projRect.x);
+            const oy = Math.min(projRect.y+projRect.h - r.y, r.y+r.h - projRect.y);
+            if (ox < oy){
+              // horizontal resolve
+              if (p.x < it.x + it.w/2) p.x -= ox; else p.x += ox;
+              p.vx = -p.vx * (0.30 + RESTITUTION);
+              p.vy *= 0.92;
+            } else {
+              if (p.y < it.y + it.h/2) p.y -= oy; else p.y += oy;
+              p.vy = -p.vy * (0.30 + RESTITUTION);
+              p.vx *= 0.92;
+            }
 
-    update(dt);
-    draw();
+            // give part some motion if broken
+            if (it.broken){
+              it.vx += p.vx * 0.02;
+              it.vy += p.vy * 0.02;
+            }
+          }
+        }
+      }
 
-    requestAnimationFrame(loop);
-  }
+      // broken parts fall
+      for (const it of world.parts){
+        if (!it.broken) continue;
 
-  boot();
-})();
-</script>
+        it.vy += G * 0.6 * dt;
+        it.x += it.vx * dt;
+        it.y += it.vy * dt;
+        it.ang += it.vang * dt;
+
+        // floor collision
+        if (it.y + it.h > ground){
+          it.y = ground - it.h;
+          it.vy = -it.vy * 0.18;
+          it.vx *= 0.75;
+          it.vang *= 0.7;
+          if (Math.abs(it.vy) < 60) it.vy = 0;
+          if (Math.abs(it.vx) < 25) it.vx = 0;
+        }
+      }
+    }
+
+    // ---------------------------
+    // Main loop
+    // ---------------------------
+    let last = performance.now();
+    function loop(now){
+      const dt = Math.min(0.033, (now-last)/1000);
+      last = now;
+
+      step(dt);
+
+      // draw
+      drawBackground();
+      drawOffice();
+      drawChairEmpty();     // chair stays (empty)
+      drawSeatedHuman(now/1000); // idle human (only before launch)
+      drawAimBand();
+      drawProjectile();
+
+      requestAnimationFrame(loop);
+    }
+
+    // Boot
+    preload()
+      .then(() => {
+        resetWorld();
+        requestAnimationFrame(loop);
+      })
+      .catch(err => {
+        console.error(err);
+        alert("Ошибка загрузки PNG. Проверь пути в репозитории и имена файлов.\n\n" + err.message);
+      });
+
+  })();
+  </script>
 </body>
 </html>
