@@ -1,197 +1,30 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8" />
-<title>Office Birds MVP</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<style>
-html,body {
-  margin:0;
-  padding:0;
-  background:#050b14;
-  overflow:hidden;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto;
-}
-canvas { display:block; }
-
-#loader {
-  position:fixed;
-  inset:0;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  background:radial-gradient(circle at top left,#10243e,#050b14);
-  color:#e6f1ff;
-}
-#loaderBox {
-  width:320px;
-  padding:16px;
-  border-radius:12px;
-  background:rgba(255,255,255,0.06);
-  box-shadow:0 10px 30px rgba(0,0,0,0.4);
-}
-#bar {
-  height:10px;
-  background:#0b1c30;
-  border-radius:6px;
-  overflow:hidden;
-  margin-top:8px;
-}
-#bar > div {
-  height:100%;
-  width:0%;
-  background:linear-gradient(90deg,#4fd1c5,#63b3ed);
-  transition:width .2s;
-}
-#pct { float:right; opacity:.7; }
-</style>
+<meta charset="UTF-8">
+<title>JS TEST</title>
 </head>
+<body style="background:#000;color:#0f0;font-size:32px">
 
-<body>
-
-<div id="loader">
-  <div id="loaderBox">
-    <div>Грузим офисный цирк… <span id="pct">0%</span></div>
-    <div id="bar"><div></div></div>
-  </div>
-</div>
-
-<canvas id="c"></canvas>
+<h1>JS TEST</h1>
+<div id="out">loading…</div>
 
 <script>
-/* ================== НАСТРОЙКИ ================== */
-const CDN = "https://cdn.jsdelivr.net/gh/mrsvh879/happyshatrov@main/";
+console.log("JS STARTED");
 
-const ASSETS = {
-  chair: CDN + "assets/player/chair.png",
-  idle:  CDN + "assets/player/human_idle.png",
-  fly:   CDN + "assets/player/human_fly.png"
+document.getElementById("out").textContent = "JS WORKS ✅";
+
+const img = new Image();
+img.onload = () => {
+  document.body.append("  PNG LOADED ✅");
+  document.body.appendChild(img);
+};
+img.onerror = () => {
+  document.body.append("  PNG ERROR ❌");
 };
 
-/* ================== CANVAS ================== */
-const canvas = document.getElementById("c");
-const ctx = canvas.getContext("2d");
-function resize(){
-  canvas.width = innerWidth;
-  canvas.height = innerHeight;
-}
-addEventListener("resize", resize);
-resize();
-
-/* ================== LOADER ================== */
-const IMG = {};
-const loader = document.getElementById("loader");
-const bar = document.querySelector("#bar > div");
-const pct = document.getElementById("pct");
-
-async function loadImage(key, url, i, total){
-  return new Promise((res, rej)=>{
-    const img = new Image();
-    img.onload = ()=>{
-      IMG[key]=img;
-      const p = Math.round(((i+1)/total)*100);
-      bar.style.width = p+"%";
-      pct.textContent = p+"%";
-      res();
-    };
-    img.onerror = ()=>rej("fail "+url);
-    img.src = url + "?v=" + Date.now();
-  });
-}
-
-(async()=>{
-  const entries = Object.entries(ASSETS);
-  for(let i=0;i<entries.length;i++){
-    await loadImage(entries[i][0], entries[i][1], i, entries.length);
-  }
-  loader.remove();
-  start();
-})();
-
-/* ================== GAME ================== */
-let chair, human;
-let dragging=false;
-let anchor={x:200,y:canvas.height-140};
-
-function start(){
-  chair = {
-    x: anchor.x,
-    y: anchor.y,
-    w: 120,
-    h: 120
-  };
-  human = {
-    x: chair.x,
-    y: chair.y-60,
-    vx:0, vy:0,
-    flying:false
-  };
-  loop();
-}
-
-canvas.addEventListener("mousedown",e=>{
-  const dx=e.offsetX-human.x;
-  const dy=e.offsetY-human.y;
-  if(dx*dx+dy*dy<40*40){
-    dragging=true;
-  }
-});
-
-canvas.addEventListener("mouseup",e=>{
-  if(!dragging) return;
-  dragging=false;
-  const dx = anchor.x - human.x;
-  const dy = anchor.y - human.y;
-  human.vx = dx*0.18;
-  human.vy = dy*0.18;
-  human.flying=true;
-});
-
-canvas.addEventListener("mousemove",e=>{
-  if(dragging){
-    human.x = e.offsetX;
-    human.y = e.offsetY;
-  }
-});
-
-function loop(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-
-  if(human.flying){
-    human.vy += 0.8;
-    human.x += human.vx;
-    human.y += human.vy;
-  } else {
-    human.x = chair.x;
-    human.y = chair.y-60;
-  }
-
-  // линия натяжения
-  if(dragging){
-    ctx.strokeStyle="#4fd1c5";
-    ctx.lineWidth=3;
-    ctx.beginPath();
-    ctx.moveTo(anchor.x,anchor.y);
-    ctx.lineTo(human.x,human.y);
-    ctx.stroke();
-  }
-
-  // chair
-  ctx.drawImage(
-    IMG.chair,
-    chair.x-chair.w/2,
-    chair.y-chair.h/2,
-    chair.w,
-    chair.h
-  );
-
-  // human
-  const hImg = human.flying ? IMG.fly : IMG.idle;
-  ctx.drawImage(hImg, human.x-50, human.y-50, 100,100);
-
-  requestAnimationFrame(loop);
-}
+img.src = "https://cdn.jsdelivr.net/gh/mrsvh879/happyshatrov@main/assets/player/chair.png";
 </script>
+
 </body>
 </html>
