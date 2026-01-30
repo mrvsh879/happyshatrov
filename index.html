@@ -9,9 +9,6 @@
     body{
       overflow:hidden;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      background:
-        radial-gradient(circle at 18% 22%, rgba(0,140,255,.35), rgba(0,0,0,0) 55%),
-        linear-gradient(120deg, #0b2b4a, #050816 62%, #03040a);
       background-image: url("assets/bg_office.png");
       background-size: cover;
       background-position: center;
@@ -28,7 +25,7 @@
       color:#dbe8ff;
       backdrop-filter: blur(10px);
       box-shadow: 0 10px 30px rgba(0,0,0,.35);
-      max-width: 360px;
+      max-width: 420px;
       z-index: 5;
       user-select: none;
     }
@@ -66,13 +63,14 @@
       color:#dbe8ff;
       backdrop-filter: blur(10px);
       box-shadow: 0 10px 30px rgba(0,0,0,.35);
-      max-width: 320px;
+      max-width: 360px;
       font-size:12px;
       line-height:1.35;
       z-index: 5;
       user-select: none;
     }
     .goal b{ font-size:13px; }
+    code{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
   </style>
 </head>
 <body>
@@ -80,18 +78,19 @@
     <div class="row">
       <span class="pill">LEVEL 1</span>
       <span class="title">Office Birds</span>
-      <button class="btn" id="resetBtn">Reset</button>
+      <button class="btn" id="resetBtn">Reset (всё заново)</button>
     </div>
     <div class="sub">
       Зажми на человечке → потяни назад → отпусти.<br/>
-      Чем сильнее натяжка, тем дальше полёт.
+      После выстрела: 2–3 сек разрушения → авто-респавн.<br/>
+      Домик НЕ восстанавливается (остаётся поломанным).
     </div>
   </div>
 
   <div class="goal">
     <b>Цель</b><br/>
     Развали домик из балок/стоек (2 этажа).<br/>
-    Внутри будет менеджер в наушниках (<code>assets/office/manager.png</code>).
+    Внутри несколько менеджеров (<code>assets/office/manager.png</code>).
   </div>
 
   <canvas id="c"></canvas>
@@ -131,7 +130,7 @@
 
     const IMAGES = {};
     const toLoad = {
-      humanIdle: asset('assets/player/human_idle.png'), // да, там стул внутри — пока ок
+      humanIdle: asset('assets/player/human_idle.png'),
       humanFly:  asset('assets/player/human_fly.png'),
       beam:      asset('assets/office/beam.png'),
       pillar:    asset('assets/office/pillar.png'),
@@ -145,7 +144,7 @@
           IMAGES[key] = await loadImg(url);
         }catch(e){
           if(key === 'manager'){
-            IMAGES[key] = null; // менеджера можно дорисовать позже
+            IMAGES[key] = null; // менеджера можно заменить позже — игра не упадёт
           }else{
             throw e;
           }
@@ -154,10 +153,11 @@
     }
 
     // ---------- Matter ----------
-    const { Engine, World, Bodies, Body, Events, Runner, Composite, Vector } = Matter;
+    const { Engine, World, Bodies, Body, Events, Runner, Composite, Vector, Sleeping } = Matter;
 
     const engine = Engine.create();
-    engine.gravity.y = 1.05;
+    engine.gravity.y = 1.0;
+    engine.enableSleeping = true;
     const world = engine.world;
 
     // ---------- rendering helpers ----------
@@ -169,7 +169,7 @@
       ctx.restore();
     }
 
-    // ---------- globals for input ----------
+    // ---------- globals ----------
     let current = null;
     let perfT = 0;
 
@@ -179,12 +179,17 @@
     let aimNow = null;
     let canShoot = true;
     let flying = false;
+    let respawnTimer = null;
 
     // tuning
-    const MAX_PULL = 170;
-    const POWER = 0.12;
+    const MAX_PULL = 140;
+    const POWER = 0.085;
+    const MAX_SPEED = 18;
 
-    // player sprite scales
+    // авто-респавн: сколько времени даём на "доломать"
+    const RESPAWN_AFTER_MS = 2800; // 2000..3000 — выбирай
+
+    // sprites
     const IDLE_SCALE = 0.62;
     const FLY_SCALE  = 0.55;
 
@@ -195,19 +200,16 @@
       return { x, y };
     }
 
-    // ВАЖНО: хитбокс по размеру СПРАЙТА (а не по маленькому кружку)
     function isOverPlayer(point, playerBody){
       const img = IMAGES.humanIdle;
       if(!img) {
         const dx = point.x - playerBody.position.x;
         const dy = point.y - playerBody.position.y;
-        return (dx*dx + dy*dy) <= (60*60);
+        return (dx*dx + dy*dy) <= (70*70);
       }
       const w = img.width * IDLE_SCALE;
       const h = img.height * IDLE_SCALE;
-
-      // чуть расширим, чтобы было удобно хватать
-      const pad = 18;
+      const pad = 22;
 
       const left = playerBody.position.x - w/2 - pad;
       const right = playerBody.position.x + w/2 + pad;
@@ -217,7 +219,64 @@
       return (point.x >= left && point.x <= right && point.y >= top && point.y <= bottom);
     }
 
+    function capVelocity(body, max){
+      const v = body.velocity;
+      const s = Math.hypot(v.x, v.y);
+      if(s > max){
+        const k = max / s;
+        Body.setVelocity(body, { x: v.x * k, y: v.y * k });
+      }
+    }
+
+    function wakeHouse(){
+      if(!current || current.houseAwake) return;
+      current.houseAwake = true;
+
+      for(const b of current.houseBodies){
+        Body.setStatic(b, false);
+        Body.setVelocity(b, {x:0,y:0});
+        Body.setAngularVelocity(b, 0);
+        Sleeping.set(b, false);
+      }
+      for(const m of current.managers){
+        Body.setStatic(m, false);
+        Body.setVelocity(m, {x:0,y:0});
+        Body.setAngularVelocity(m, 0);
+        Sleeping.set(m, false);
+      }
+    }
+
+    function clearRespawnTimer(){
+      if(respawnTimer){
+        clearTimeout(respawnTimer);
+        respawnTimer = null;
+      }
+    }
+
+    function respawnPlayerOnly(){
+      if(!current) return;
+
+      clearRespawnTimer();
+
+      const p = current.player;
+      flying = false;
+      aiming = false;
+      canShoot = true;
+
+      // вернуть на старт, НЕ трогая домик
+      Body.setVelocity(p, { x: 0, y: 0 });
+      Body.setAngularVelocity(p, 0);
+      Body.setAngle(p, 0);
+      Body.setPosition(p, { x: current.playerStart.x, y: current.playerStart.y });
+      Body.setStatic(p, true);
+
+      // небольшая "защита" 300мс чтобы не телепортнулся внутрь балки
+      p.collisionFilter.group = -1; // не сталкивается ни с чем в группе
+      setTimeout(()=>{ if(current) current.player.collisionFilter.group = 0; }, 300);
+    }
+
     function setupWorld(){
+      clearRespawnTimer();
       World.clear(world, false);
       Engine.clear(engine);
 
@@ -225,99 +284,128 @@
       const H = window.innerHeight;
 
       // ground
-      World.add(world, Bodies.rectangle(W/2, H + 40, W + 200, 120, {
-        isStatic: true, friction: 0.9, restitution: 0.0
+      World.add(world, Bodies.rectangle(W/2, H + 50, W + 400, 140, {
+        isStatic: true, friction: 0.95, restitution: 0.0
       }));
 
-      // player (чуть крупнее физ.тело, чтобы всё было стабильнее)
-      const playerStart = { x: Math.max(160, W*0.12), y: H*0.80 };
+      // player: старт повыше
+      const playerStart = {
+        x: Math.max(170, W*0.12),
+        y: H*0.78
+      };
+
       const player = Bodies.circle(playerStart.x, playerStart.y, 34, {
         density: 0.0045,
-        frictionAir: 0.008,
-        restitution: 0.15,
-        friction: 0.6
+        frictionAir: 0.010,
+        restitution: 0.12,
+        friction: 0.65
       });
       player.label = 'player';
       World.add(world, player);
 
-      // домик: 2 pillar + 3 beam (низ/середина/верх)
-      const houseX = clamp(W*0.58, playerStart.x + 360, W - 340);
+      // Держим игрока "припаркованным" пока не тянем
+      Body.setStatic(player, true);
+
+      // домик (побольше) + ближе
+      const houseX = clamp(W*0.60, playerStart.x + 320, W - 320);
       const houseY = H*0.80;
 
-      const pillarH = 220;
-      const pillarW = 40;
+      const pillarH = 250;
+      const pillarW = 42;
 
-      const floorGap = 96;
-      const beamLen = 310;
-      const beamH = 22;
+      const floorGap = 100;
+      const beamLen = 360;
+      const beamH = 24;
 
-      const leftP  = Bodies.rectangle(houseX - beamLen/2 + 30, houseY - pillarH/2 + 8, pillarW, pillarH,
-        { density: 0.0032, friction: 0.9, restitution: 0.05 }
+      // СТАБИЛЕН в начале: isStatic:true
+      const houseBodies = [];
+
+      const leftP  = Bodies.rectangle(houseX - beamLen/2 + 34, houseY - pillarH/2 + 10, pillarW, pillarH,
+        { isStatic: true, density: 0.0032, friction: 0.9, restitution: 0.02 }
       );
-      leftP.label = 'pillar';
+      leftP.label = 'pillar'; houseBodies.push(leftP);
 
-      const rightP = Bodies.rectangle(houseX + beamLen/2 - 30, houseY - pillarH/2 + 8, pillarW, pillarH,
-        { density: 0.0032, friction: 0.9, restitution: 0.05 }
+      const rightP = Bodies.rectangle(houseX + beamLen/2 - 34, houseY - pillarH/2 + 10, pillarW, pillarH,
+        { isStatic: true, density: 0.0032, friction: 0.9, restitution: 0.02 }
       );
-      rightP.label = 'pillar';
+      rightP.label = 'pillar'; houseBodies.push(rightP);
 
       const bottomBeam = Bodies.rectangle(houseX, houseY, beamLen, beamH,
-        { density: 0.0026, friction: 0.9, restitution: 0.03 }
+        { isStatic: true, density: 0.0026, friction: 0.9, restitution: 0.01 }
       );
-      bottomBeam.label = 'beam';
+      bottomBeam.label = 'beam'; houseBodies.push(bottomBeam);
 
       const midBeam = Bodies.rectangle(houseX, houseY - floorGap, beamLen, beamH,
-        { density: 0.0026, friction: 0.9, restitution: 0.03 }
+        { isStatic: true, density: 0.0026, friction: 0.9, restitution: 0.01 }
       );
-      midBeam.label = 'beam';
+      midBeam.label = 'beam'; houseBodies.push(midBeam);
 
       const topBeam = Bodies.rectangle(houseX, houseY - floorGap*2, beamLen, beamH,
-        { density: 0.0026, friction: 0.9, restitution: 0.03 }
+        { isStatic: true, density: 0.0026, friction: 0.9, restitution: 0.01 }
       );
-      topBeam.label = 'beam';
+      topBeam.label = 'beam'; houseBodies.push(topBeam);
 
-      World.add(world, [leftP, rightP, bottomBeam, midBeam, topBeam]);
+      World.add(world, houseBodies);
 
-      // менеджер внутри (место зарезервировано)
-      const manager = Bodies.circle(houseX, houseY - floorGap - 28, 22, {
-        density: 0.0012, restitution: 0.2, friction: 0.4, frictionAir: 0.01
-      });
-      manager.label = 'manager';
-      World.add(world, manager);
+      // менеджеры внутри (тоже статичны до первого выстрела)
+      const managers = [];
+      const managerPositions = [
+        { x: houseX - 70, y: houseY - floorGap - 22 },
+        { x: houseX +  0, y: houseY - floorGap - 22 },
+        { x: houseX + 70, y: houseY - floorGap - 22 },
+      ];
+      for(const p of managerPositions){
+        const m = Bodies.circle(p.x, p.y, 22, {
+          isStatic: true,
+          density: 0.0012,
+          restitution: 0.15,
+          friction: 0.5,
+          frictionAir: 0.02
+        });
+        m.label = 'manager';
+        managers.push(m);
+      }
+      World.add(world, managers);
 
-      // reset button
       document.getElementById('resetBtn').onclick = () => setupWorld();
 
-      // collisions (позже можно расширить на "ломание")
-      let managerHit = false;
-      Events.off(engine, 'collisionStart'); // чтобы не копились хэндлеры при reset
-      Events.on(engine, 'collisionStart', (ev)=>{
-        for(const pair of ev.pairs){
-          const a = pair.bodyA, b = pair.bodyB;
-          const labels = [a.label, b.label].sort().join('+');
-          if(labels === 'manager+player'){
-            const rel = Vector.magnitude(Vector.sub(a.velocity, b.velocity));
-            if(rel > 6) managerHit = true;
+      current = {
+        W, H,
+        player,
+        playerStart,
+        houseBodies,
+        managers,
+        houseAwake: false,
+      };
+
+      canShoot = true;
+      flying = false;
+      aiming = false;
+
+      Events.off(engine, 'beforeUpdate');
+      Events.on(engine, 'beforeUpdate', ()=>{
+        if(current?.player){
+          capVelocity(current.player, MAX_SPEED);
+          if(current.player.velocity.y > MAX_SPEED*0.95){
+            Body.setVelocity(current.player, { x: current.player.velocity.x, y: MAX_SPEED*0.95 });
           }
         }
       });
-
-      current = { W, H, player, manager, managerHit };
     }
 
-    // ---------- input (Pointer Events) ----------
+    // ---------- input ----------
     canvas.addEventListener('pointerdown', (e)=>{
       if(!current) return;
       if(!canShoot) return;
 
       canvas.setPointerCapture(e.pointerId);
-
       const p = getPointerPos(e);
+
       if(isOverPlayer(p, current.player)){
         aiming = true;
         flying = false;
 
-        aimStart = { x: current.player.position.x, y: current.player.position.y };
+        aimStart = { x: current.playerStart.x, y: current.playerStart.y };
         aimNow = { ...p };
 
         Body.setVelocity(current.player, { x: 0, y: 0 });
@@ -336,21 +424,33 @@
       if(!aiming || !current) return;
       aiming = false;
 
+      // оживляем домик только после первого выстрела
+      wakeHouse();
+
       const pull = { x: aimStart.x - aimNow.x, y: aimStart.y - aimNow.y };
       const len = Math.hypot(pull.x, pull.y);
       const k = (len > 0) ? Math.min(1, MAX_PULL / len) : 1;
       const pullClamped = { x: pull.x * k, y: pull.y * k };
 
+      // снимаем "парковку"
       Body.setStatic(current.player, false);
-      Body.setVelocity(current.player, {
-        x: pullClamped.x * POWER * 60,
-        y: pullClamped.y * POWER * 60
-      });
-      Body.setAngularVelocity(current.player, pullClamped.x * 0.002);
+
+      // вычисляем скорость
+      const vx = pullClamped.x * POWER * 60;
+      const vy = pullClamped.y * POWER * 60;
+      Body.setVelocity(current.player, { x: vx, y: vy });
+      capVelocity(current.player, MAX_SPEED);
+
+      Body.setAngularVelocity(current.player, clamp(pullClamped.x * 0.0018, -0.08, 0.08));
 
       flying = true;
       canShoot = false;
-      setTimeout(()=>{ canShoot = true; }, 3500);
+
+      // ВАЖНО: авто-респавн только игрока, домик не трогаем
+      clearRespawnTimer();
+      respawnTimer = setTimeout(()=>{
+        respawnPlayerOnly();
+      }, RESPAWN_AFTER_MS);
     }
 
     canvas.addEventListener('pointerup', releaseShot);
@@ -378,12 +478,12 @@
           );
         }else if(b.label === 'manager'){
           if(IMAGES.manager){
-            drawImageCentered(IMAGES.manager, b.position.x, b.position.y, 130, 130, b.angle);
+            drawImageCentered(IMAGES.manager, b.position.x, b.position.y, 140, 140, b.angle);
           }else{
             ctx.save();
             ctx.translate(b.position.x, b.position.y);
             ctx.rotate(b.angle);
-            ctx.fillStyle = 'rgba(255,255,255,.9)';
+            ctx.fillStyle = 'rgba(255,255,255,.92)';
             ctx.beginPath(); ctx.arc(0,0,22,0,Math.PI*2); ctx.fill();
             ctx.fillStyle = 'rgba(0,180,255,.9)';
             ctx.beginPath(); ctx.arc(10,-3,6,0,Math.PI*2); ctx.fill();
@@ -396,17 +496,18 @@
             const ww = img.width * scale;
             const hh = img.height * scale;
 
-            // качание вперёд/назад
+            // качание вперед/назад только когда целимся
             let extraAngle = 0;
             if(aiming && aimStart && aimNow){
               const pullX = aimStart.x - aimNow.x;
               const pullY = aimStart.y - aimNow.y;
               const pullLen = Math.hypot(pullX, pullY);
               const a = clamp(pullLen / MAX_PULL, 0, 1);
-              extraAngle = Math.sin(perfT*0.012) * (0.18*a);
+              extraAngle = Math.sin(perfT*0.012) * (0.20*a);
             }else{
-              extraAngle = Math.sin(perfT*0.006) * 0.03;
+              extraAngle = 0;
             }
+
             drawImageCentered(img, b.position.x, b.position.y, ww, hh, extraAngle);
           }else{
             ctx.fillStyle="#fff";
@@ -443,7 +544,6 @@
     // ---------- main ----------
     (async ()=>{
       await preload();
-
       setupWorld();
 
       const runner = Runner.create();
