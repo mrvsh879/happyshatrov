@@ -1,0 +1,655 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Office Birds — Level 1</title>
+  <style>
+    :root {
+      --bg1:#0b1220;
+      --bg2:#0a1b2a;
+      --panel: rgba(255,255,255,.08);
+      --panel2: rgba(255,255,255,.12);
+      --text: rgba(255,255,255,.92);
+      --muted: rgba(255,255,255,.65);
+      --accent: #7cf7ff;
+      --danger: #ff6b8b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      color: var(--text);
+      background: radial-gradient(1200px 800px at 20% 10%, #13304a 0%, var(--bg1) 45%, #070b12 100%);
+      overflow: hidden;
+    }
+    #wrap { position: relative; width: 100vw; height: 100vh; }
+    canvas { display:block; width:100%; height:100%; }
+
+    .hud {
+      position: absolute;
+      left: 16px;
+      top: 16px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: linear-gradient(180deg, var(--panel), rgba(255,255,255,.04));
+      border: 1px solid rgba(255,255,255,.10);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 10px 30px rgba(0,0,0,.35);
+      user-select: none;
+    }
+    .badge {
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(124,247,255,.12);
+      border: 1px solid rgba(124,247,255,.25);
+      color: var(--accent);
+      font-weight: 700;
+      letter-spacing: .2px;
+      font-size: 12px;
+    }
+    .title {
+      display:flex; flex-direction:column; gap:2px;
+      min-width: 220px;
+    }
+    .title b { font-size: 13px; }
+    .title span { font-size: 12px; color: var(--muted); }
+
+    .btns { display:flex; gap:8px; }
+    button {
+      appearance: none;
+      border: 1px solid rgba(255,255,255,.14);
+      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.06));
+      color: var(--text);
+      padding: 8px 10px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 12px;
+      transition: transform .08s ease, background .2s ease, border-color .2s ease;
+    }
+    button:hover { border-color: rgba(124,247,255,.35); }
+    button:active { transform: translateY(1px) scale(.99); }
+    .danger { border-color: rgba(255,107,139,.35); }
+    .danger:hover { border-color: rgba(255,107,139,.55); }
+
+    .tip {
+      position: absolute;
+      right: 16px;
+      top: 16px;
+      max-width: 360px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: linear-gradient(180deg, var(--panel), rgba(255,255,255,.04));
+      border: 1px solid rgba(255,255,255,.10);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 10px 30px rgba(0,0,0,.35);
+      font-size: 12px;
+      color: var(--muted);
+      user-select: none;
+    }
+    .tip b { color: var(--text); }
+
+    .footer {
+      position:absolute;
+      left: 16px;
+      bottom: 14px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.10);
+      font-size: 12px;
+      color: var(--muted);
+      user-select: none;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+<div id="wrap">
+  <div class="hud">
+    <div class="badge">LEVEL 1</div>
+    <div class="title">
+      <b>Office Birds</b>
+      <span>Зажми на “человеке на стуле” → потяни → отпусти</span>
+    </div>
+    <div class="btns">
+      <button id="resetBtn" class="danger">Reset</button>
+      <button id="nextBtn" title="Пока заглушка">Next ▶</button>
+    </div>
+  </div>
+
+  <div class="tip">
+    <b>Цель:</b> развали офисный домик и сбей “наушников”.<br/>
+    <b>Фишка:</b> когда ты не трогаешь персонажа — он <b>качает стул</b>.
+  </div>
+
+  <div class="footer">
+    Сделано как статичный HTML → идеально для GitHub Pages. Physics: <b>Matter.js</b>.
+  </div>
+
+  <canvas id="c"></canvas>
+</div>
+
+<!-- Matter.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
+<script>
+(() => {
+  const {
+    Engine, Render, Runner, Bodies, Body, Composite, Composites, Constraint,
+    Mouse, MouseConstraint, Events, Vector
+  } = Matter;
+
+  const canvas = document.getElementById('c');
+
+  // ---------- World / Engine ----------
+  const engine = Engine.create();
+  engine.gravity.y = 1.05;
+
+  const render = Render.create({
+    canvas,
+    engine,
+    options: {
+      width: window.innerWidth,
+      height: window.innerHeight,
+      wireframes: false,
+      background: 'transparent',
+      pixelRatio: Math.min(window.devicePixelRatio || 1, 2)
+    }
+  });
+
+  const runner = Runner.create();
+  Runner.run(runner, engine);
+  Render.run(render);
+
+  // ---------- Helpers ----------
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const rand = (a,b) => a + Math.random()*(b-a);
+
+  function resize() {
+    render.options.width = window.innerWidth;
+    render.options.height = window.innerHeight;
+    render.canvas.width = Math.floor(window.innerWidth * render.options.pixelRatio);
+    render.canvas.height = Math.floor(window.innerHeight * render.options.pixelRatio);
+    render.canvas.style.width = window.innerWidth + 'px';
+    render.canvas.style.height = window.innerHeight + 'px';
+  }
+  window.addEventListener('resize', () => {
+    resize();
+    // лёгкий рефит границ без усложнений: пересоздадим уровень
+    buildLevel();
+  });
+
+  // ---------- Scene variables ----------
+  let ground, leftWall, rightWall;
+  let slingAnchor, slingConstraint, projectile;
+  let mouseConstraint;
+  let officeBlocks = [];
+  let officePeople = [];
+  let staticDecor = [];
+  let levelBuilt = false;
+
+  // ---------- Custom drawing ----------
+  function drawBackground(ctx) {
+    const w = render.options.width, h = render.options.height;
+    // “полы” и мягкие лучи
+    ctx.save();
+    ctx.globalAlpha = 1;
+
+    // floor gradient
+    const g = ctx.createLinearGradient(0, h*0.55, 0, h);
+    g.addColorStop(0, 'rgba(255,255,255,0)');
+    g.addColorStop(1, 'rgba(255,255,255,0.06)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, h*0.55, w, h*0.45);
+
+    // light beams
+    for (let i=0;i<3;i++){
+      const x = w*(0.15 + i*0.23);
+      const lg = ctx.createRadialGradient(x, h*0.1, 10, x, h*0.1, h*0.9);
+      lg.addColorStop(0, 'rgba(124,247,255,0.10)');
+      lg.addColorStop(1, 'rgba(124,247,255,0)');
+      ctx.fillStyle = lg;
+      ctx.beginPath();
+      ctx.ellipse(x, h*0.25, w*0.18, h*0.55, 0, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  function drawOfficePerson(ctx, body) {
+    // body.position used
+    const p = body.position;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(body.angle);
+
+    // shadow
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.ellipse(0, 18, 26, 10, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // head
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.beginPath();
+    ctx.arc(0, 0, 16, 0, Math.PI*2);
+    ctx.fill();
+
+    // headphones
+    ctx.strokeStyle = 'rgba(124,247,255,0.9)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(0, -2, 18, Math.PI*0.15, Math.PI*0.85);
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(124,247,255,0.9)';
+    ctx.beginPath(); ctx.arc(-15, 2, 5.5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc( 15, 2, 5.5, 0, Math.PI*2); ctx.fill();
+
+    // mic
+    ctx.strokeStyle = 'rgba(255,107,139,0.9)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(12, 8);
+    ctx.lineTo(24, 14);
+    ctx.stroke();
+
+    // tiny mouth line
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-5, 8);
+    ctx.lineTo(5, 8);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  function drawProjectile(ctx, body) {
+    const p = body.position;
+    const isDragging = mouseConstraint && mouseConstraint.body === body;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(body.angle);
+
+    // shadow
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.ellipse(8, 34, 34, 14, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // chair base
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    roundRect(ctx, -24, 26, 68, 10, 6); ctx.fill();
+
+    // chair wheels
+    ctx.fillStyle = 'rgba(124,247,255,0.55)';
+    for (let i=0;i<4;i++){
+      ctx.beginPath();
+      ctx.arc(-16 + i*18, 36, 4, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // seat
+    ctx.fillStyle = 'rgba(255,255,255,0.16)';
+    roundRect(ctx, -10, 8, 44, 18, 8); ctx.fill();
+
+    // back
+    ctx.fillStyle = 'rgba(255,255,255,0.14)';
+    roundRect(ctx, 18, -16, 14, 28, 7); ctx.fill();
+
+    // person torso
+    ctx.fillStyle = 'rgba(255,255,255,0.70)';
+    roundRect(ctx, -8, -8, 18, 18, 7); ctx.fill();
+
+    // head
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.beginPath();
+    ctx.arc(0, -18, 10, 0, Math.PI*2);
+    ctx.fill();
+
+    // tie (for fun)
+    ctx.fillStyle = 'rgba(255,107,139,0.9)';
+    ctx.beginPath();
+    ctx.moveTo(2, 2);
+    ctx.lineTo(10, 10);
+    ctx.lineTo(2, 14);
+    ctx.closePath();
+    ctx.fill();
+
+    // glow when draggable
+    if (isDragging) {
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = 'rgba(124,247,255,0.9)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(0, 0, 46, 0, Math.PI*2);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  function roundRect(ctx, x, y, w, h, r){
+    const rr = Math.min(r, w/2, h/2);
+    ctx.beginPath();
+    ctx.moveTo(x+rr, y);
+    ctx.lineTo(x+w-rr, y);
+    ctx.quadraticCurveTo(x+w, y, x+w, y+rr);
+    ctx.lineTo(x+w, y+h-rr);
+    ctx.quadraticCurveTo(x+w, y+h, x+w-rr, y+h);
+    ctx.lineTo(x+rr, y+h);
+    ctx.quadraticCurveTo(x, y+h, x, y+h-rr);
+    ctx.lineTo(x, y+rr);
+    ctx.quadraticCurveTo(x, y, x+rr, y);
+    ctx.closePath();
+  }
+
+  // ---------- Level builder ----------
+  function clearWorld() {
+    Composite.clear(engine.world, false);
+    officeBlocks = [];
+    officePeople = [];
+    staticDecor = [];
+    ground = leftWall = rightWall = null;
+    slingAnchor = slingConstraint = projectile = null;
+    levelBuilt = false;
+  }
+
+  function buildLevel() {
+    clearWorld();
+
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+
+    // boundaries
+    ground = Bodies.rectangle(W/2, H+40, W+200, 120, {
+      isStatic: true,
+      render: { fillStyle: 'rgba(255,255,255,0.08)' }
+    });
+    leftWall = Bodies.rectangle(-60, H/2, 120, H+200, { isStatic: true, render: { visible:false }});
+    rightWall = Bodies.rectangle(W+60, H/2, 120, H+200, { isStatic: true, render: { visible:false }});
+
+    Composite.add(engine.world, [ground, leftWall, rightWall]);
+
+    // slingshot anchor
+    const slingX = W * 0.18;
+    const slingY = H * 0.62;
+
+    slingAnchor = { x: slingX, y: slingY };
+
+    // projectile (human+chair)
+    projectile = Bodies.circle(slingX + 40, slingY - 10, 26, {
+      density: 0.005,
+      restitution: 0.35,
+      friction: 0.6,
+      frictionAir: 0.012,
+      render: { visible: false } // we draw it ourselves
+    });
+
+    slingConstraint = Constraint.create({
+      pointA: slingAnchor,
+      bodyB: projectile,
+      stiffness: 0.028,
+      damping: 0.06,
+      length: 10,
+      render: {
+        strokeStyle: 'rgba(124,247,255,0.65)',
+        lineWidth: 4
+      }
+    });
+
+    Composite.add(engine.world, [projectile, slingConstraint]);
+
+    // platform for sling area (visual block)
+    const slingPlatform = Bodies.rectangle(slingX+40, slingY+60, 260, 24, {
+      isStatic: true,
+      render: { fillStyle: 'rgba(255,255,255,0.10)' }
+    });
+    Composite.add(engine.world, slingPlatform);
+
+    // office "house" blocks
+    const baseX = W * 0.72;
+    const baseY = H * 0.70;
+
+    // floor stand
+    const officeBase = Bodies.rectangle(baseX, baseY+90, 440, 26, {
+      isStatic: true,
+      render: { fillStyle: 'rgba(255,255,255,0.10)' }
+    });
+    Composite.add(engine.world, officeBase);
+
+    // create a simple "tower/house"
+    const blockOpts = (fill) => ({
+      density: 0.0022,
+      restitution: 0.15,
+      friction: 0.8,
+      render: { fillStyle: fill, strokeStyle: 'rgba(255,255,255,0.10)', lineWidth: 1 }
+    });
+
+    const glass = 'rgba(124,247,255,0.10)';
+    const wood  = 'rgba(255,255,255,0.12)';
+    const metal = 'rgba(255,255,255,0.16)';
+
+    // bottom pillars
+    officeBlocks.push(
+      Bodies.rectangle(baseX-120, baseY+40, 26, 140, blockOpts(wood)),
+      Bodies.rectangle(baseX+120, baseY+40, 26, 140, blockOpts(wood)),
+      Bodies.rectangle(baseX,      baseY-30, 340, 26, blockOpts(metal))
+    );
+
+    // mid layer
+    officeBlocks.push(
+      Bodies.rectangle(baseX-90, baseY-80, 22, 120, blockOpts(glass)),
+      Bodies.rectangle(baseX+90, baseY-80, 22, 120, blockOpts(glass)),
+      Bodies.rectangle(baseX,    baseY-150, 260, 22, blockOpts(metal))
+    );
+
+    // roof-ish
+    officeBlocks.push(
+      Bodies.rectangle(baseX-60, baseY-210, 20, 90, blockOpts(wood)),
+      Bodies.rectangle(baseX+60, baseY-210, 20, 90, blockOpts(wood)),
+      Bodies.rectangle(baseX,    baseY-255, 180, 18, blockOpts(metal))
+    );
+
+    Composite.add(engine.world, officeBlocks);
+
+    // office people inside (headphones talkers) — small bodies to knock down
+    function addOfficePerson(x, y) {
+      const b = Bodies.circle(x, y, 18, {
+        density: 0.0014,
+        restitution: 0.25,
+        friction: 0.9,
+        frictionAir: 0.02,
+        render: { visible: false }
+      });
+      officePeople.push(b);
+      Composite.add(engine.world, b);
+    }
+
+    addOfficePerson(baseX - 60, baseY + 10);
+    addOfficePerson(baseX + 10, baseY - 110);
+    addOfficePerson(baseX + 40, baseY - 210);
+
+    // mouse constraint (dragging)
+    const mouse = Mouse.create(render.canvas);
+    mouse.pixelRatio = render.options.pixelRatio;
+
+    mouseConstraint = MouseConstraint.create(engine, {
+      mouse,
+      constraint: {
+        stiffness: 0.12,
+        damping: 0.12,
+        render: { visible: false }
+      }
+    });
+    Composite.add(engine.world, mouseConstraint);
+
+    // Prevent page scroll / select issues
+    render.canvas.addEventListener('touchstart', e => e.preventDefault(), { passive:false });
+    render.canvas.addEventListener('touchmove', e => e.preventDefault(), { passive:false });
+
+    // Release logic (like slingshot)
+    let hasLaunched = false;
+
+    Events.on(mouseConstraint, 'enddrag', (evt) => {
+      if (evt.body === projectile && slingConstraint.bodyB) {
+        // release only if stretched enough
+        const d = Vector.magnitude(Vector.sub(projectile.position, slingAnchor));
+        if (d > 45) {
+          slingConstraint.bodyB = null;
+          hasLaunched = true;
+          // little boost to feel snappier
+          const dir = Vector.normalise(Vector.sub(slingAnchor, projectile.position));
+          Body.applyForce(projectile, projectile.position, Vector.mult(dir, 0.012));
+        }
+      }
+    });
+
+    // If projectile went too slow or offscreen, allow reattach on reset
+    Events.on(engine, 'afterUpdate', () => {
+      if (!projectile) return;
+
+      // idle rocking (only when still attached AND not dragging)
+      const dragging = mouseConstraint.body === projectile;
+      if (slingConstraint.bodyB && !dragging) {
+        const t = engine.timing.timestamp * 0.002;
+        // small rocking torque
+        Body.setAngularVelocity(projectile, Math.sin(t) * 0.02);
+        // keep it near anchor a bit (feels like sitting and rocking)
+        const toHome = Vector.sub({x: slingAnchor.x + 40, y: slingAnchor.y - 10}, projectile.position);
+        Body.applyForce(projectile, projectile.position, Vector.mult(toHome, 0.00003));
+      }
+
+      // clamp super far drags (so it doesn't bug)
+      if (mouseConstraint.body === projectile && slingConstraint.bodyB) {
+        const v = Vector.sub(projectile.position, slingAnchor);
+        const mag = Vector.magnitude(v);
+        if (mag > 220) {
+          const nv = Vector.mult(Vector.normalise(v), 220);
+          Body.setPosition(projectile, Vector.add(slingAnchor, nv));
+        }
+      }
+    });
+
+    // Add a "win" check: if all headphone people are low (fallen)
+    let won = false;
+    Events.on(engine, 'afterUpdate', () => {
+      if (won) return;
+      if (!hasLaunched) return;
+
+      const downCount = officePeople.filter(p => p.position.y > (H * 0.82)).length;
+      if (downCount >= officePeople.length) {
+        won = true;
+        showToast('✅ Уровень пройден! (пока только 1 уровень)');
+      }
+    });
+
+    // custom render
+    Events.on(render, 'beforeRender', () => {
+      const ctx = render.context;
+      // clear
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.clearRect(0,0,render.canvas.width, render.canvas.height);
+
+      // scale for pixelRatio
+      const pr = render.options.pixelRatio;
+      ctx.scale(pr, pr);
+
+      drawBackground(ctx);
+    });
+
+    Events.on(render, 'afterRender', () => {
+      const ctx = render.context;
+      const pr = render.options.pixelRatio;
+      ctx.save();
+      ctx.setTransform(pr,0,0,pr,0,0);
+
+      // Draw a nice sling post
+      ctx.save();
+      ctx.translate(slingAnchor.x, slingAnchor.y);
+      ctx.fillStyle = 'rgba(255,255,255,0.10)';
+      roundRect(ctx, -14, -40, 28, 120, 12); ctx.fill();
+      ctx.fillStyle = 'rgba(124,247,255,0.20)';
+      roundRect(ctx, -10, -36, 20, 36, 10); ctx.fill();
+      ctx.restore();
+
+      // Draw extra sling "band" (because matter draws only constraint line)
+      if (projectile && slingConstraint && slingConstraint.bodyB) {
+        const a = slingAnchor;
+        const b = projectile.position;
+        ctx.strokeStyle = 'rgba(255,107,139,0.75)';
+        ctx.lineWidth = 6;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+
+      // Draw office people custom
+      for (const p of officePeople) drawOfficePerson(ctx, p);
+
+      // Draw projectile custom
+      if (projectile) drawProjectile(ctx, projectile);
+
+      ctx.restore();
+    });
+
+    levelBuilt = true;
+    resize();
+  }
+
+  // ---------- Toast ----------
+  let toastTimer = null;
+  function showToast(text) {
+    const el = document.createElement('div');
+    el.style.position = 'absolute';
+    el.style.left = '50%';
+    el.style.top = '78px';
+    el.style.transform = 'translateX(-50%)';
+    el.style.padding = '10px 14px';
+    el.style.borderRadius = '14px';
+    el.style.background = 'linear-gradient(180deg, rgba(124,247,255,.18), rgba(255,255,255,.06))';
+    el.style.border = '1px solid rgba(124,247,255,.35)';
+    el.style.backdropFilter = 'blur(10px)';
+    el.style.boxShadow = '0 12px 40px rgba(0,0,0,.35)';
+    el.style.color = 'rgba(255,255,255,.92)';
+    el.style.fontWeight = '800';
+    el.style.fontSize = '13px';
+    el.style.letterSpacing = '.2px';
+    el.style.userSelect = 'none';
+    el.textContent = text;
+    document.getElementById('wrap').appendChild(el);
+
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.remove(), 2200);
+  }
+
+  // ---------- Buttons ----------
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    buildLevel();
+    showToast('↩ Reset');
+  });
+
+  document.getElementById('nextBtn').addEventListener('click', () => {
+    showToast('▶ Next: добавим уровни дальше');
+  });
+
+  // ---------- Boot ----------
+  buildLevel();
+
+})();
+</script>
+</body>
+</html>
