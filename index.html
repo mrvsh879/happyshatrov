@@ -55,6 +55,7 @@
     #bar{height:10px;background:#0b1c30;border-radius:6px;overflow:hidden;margin-top:8px}
     #bar>div{height:100%;width:0%;background:linear-gradient(90deg,#4fd1c5,#63b3ed);transition:width .2s}
     #pct{float:right;opacity:.7}
+    code{background:rgba(255,255,255,.08);padding:1px 6px;border-radius:8px}
   </style>
 </head>
 <body>
@@ -64,7 +65,7 @@
     <div>Грузим офисный цирк… <span id="pct">0%</span></div>
     <div id="bar"><div></div></div>
     <div style="margin-top:10px;opacity:.7;font-size:12px">
-      Если зависло — проверь пути: <code>assets/player/...</code>
+      Пути должны быть: <code>assets/player/...</code>
     </div>
   </div>
 </div>
@@ -83,7 +84,7 @@
 
 <div class="goal">
   <b>Цель:</b> развали офисный домик и “сбей” работников в наушниках.
-  <div style="opacity:.8;margin-top:6px">Фишка: пока не трогаешь — он качается.</div>
+  <div style="opacity:.8;margin-top:6px">Пока не трогаешь — он качается вперёд/назад.</div>
 </div>
 
 <canvas id="c"></canvas>
@@ -92,7 +93,7 @@
 /* ================== ASSETS ================== */
 const ASSETS = {
   chair: "assets/player/chair.png",
-  idle:  "assets/player/human_idle.png", // (внутри уже есть кресло)
+  idle:  "assets/player/human_idle.png", // в этом спрайте уже есть кресло
   fly:   "assets/player/human_fly.png"
 };
 
@@ -135,24 +136,21 @@ const CFG = {
   bounce: 0.22,
   friction: 0.78,
 
-  // “как Angry Birds”: чем дальше оттянул — тем сильнее
+  // как Angry Birds: чем дальше оттянул — тем сильнее
   launchK: 0.23,
   maxPull: 220,
 
-  // idle качание
-  rockAmp: 6,
-  rockSpeed: 0.035,
+  // ✅ idle качание вперёд/назад (rotation)
+  rockAngleDeg: 10,
+  rockSpeed: 0.035
 };
 
-/* ================== WORLD / LEVEL ================== */
 function anchorPoint(){
   return { x: Math.round(canvas.width*0.18), y: Math.round(canvas.height*0.74) };
 }
 
-const level = {
-  blocks: [], // прямоугольники
-  dudes: []   // “офисные работники” пока кружками
-};
+/* ================== WORLD / LEVEL ================== */
+const level = { blocks: [], dudes: [] };
 
 function buildLevel(){
   level.blocks = [];
@@ -161,8 +159,7 @@ function buildLevel(){
   const baseX = Math.round(canvas.width*0.82);
   const baseY = Math.round(canvas.height*0.80);
 
-  // простая башня из “столов/перегородок”
-  const w = 110, h = 20, colW = 20, colH = 95;
+  const h = 20, colW = 20, colH = 95;
 
   // нижняя платформа
   level.blocks.push({x: baseX, y: baseY, w: 260, h: 26, hp: 999});
@@ -177,7 +174,7 @@ function buildLevel(){
   level.blocks.push({x: baseX-60, y: baseY-220, w: colW, h: colH, hp: 50});
   level.blocks.push({x: baseX+60, y: baseY-220, w: colW, h: colH, hp: 50});
 
-  // “офисные ребята”
+  // “офисные работники” (пока кружки)
   level.dudes.push({x: baseX, y: baseY-95, r: 14, alive: true});
   level.dudes.push({x: baseX, y: baseY-195, r: 14, alive: true});
 }
@@ -190,42 +187,67 @@ function bg(){
   ctx.fillRect(0,0,canvas.width,canvas.height);
 }
 
+function drawGround(){
+  ctx.fillStyle = "rgba(255,255,255,0.06)";
+  ctx.fillRect(0, canvas.height-CFG.floorYPad, canvas.width, 6);
+}
+
+function drawBlocks(){
+  for (const b of level.blocks){
+    if (b.hp <= 0) continue;
+    const k = Math.max(0.25, Math.min(1, b.hp/100));
+    ctx.fillStyle = `rgba(255,255,255,${0.08*k})`;
+    ctx.strokeStyle = `rgba(255,255,255,${0.18*k})`;
+    ctx.lineWidth = 2;
+
+    const x = b.x - b.w/2;
+    const y = b.y - b.h/2;
+    ctx.fillRect(x,y,b.w,b.h);
+    ctx.strokeRect(x,y,b.w,b.h);
+  }
+}
+
+function drawDudes(){
+  for (const d of level.dudes){
+    if (!d.alive) continue;
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    ctx.beginPath();
+    ctx.arc(d.x,d.y,d.r,0,Math.PI*2);
+    ctx.fill();
+
+    // наушники
+    ctx.strokeStyle = "rgba(124,247,255,0.9)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, d.r+4, Math.PI*0.15, Math.PI*0.85);
+    ctx.stroke();
+  }
+}
+
 /* ================== PLAYER ================== */
 let dragging=false;
 let hasLaunched=false;
 let t=0;
 
-const player = {
-  x:0, y:0, vx:0, vy:0,
-  flying:false
-};
+const player = { x:0, y:0, vx:0, vy:0, flying:false };
 
-// стартовая “кресло+чел” (idle sprite включает кресло)
-const idleRig = {
-  x:0, y:0,
-  scale: 1.0
-};
+// idle rig (точка опоры кресла)
+const idleRig = { x:0, y:0 };
 
-// отдельный пустой стул (рисуем ПОСЛЕ запуска)
-const chairEmpty = {
-  x:0, y:0,
-  w:150, h:150
-};
+// пустой стул остаётся после запуска
+const chairEmpty = { x:0, y:0, w:150, h:150 };
 
 function reset(){
   const a = anchorPoint();
   hasLaunched = false;
   dragging = false;
 
-  // idle rig в якоре (idle картинка уже с креслом)
   idleRig.x = a.x;
   idleRig.y = a.y;
 
-  // пустой стул (будет показан после запуска)
   chairEmpty.x = a.x;
   chairEmpty.y = a.y;
 
-  // снаряд (человек в полёте) изначально прячем
   player.x = a.x;
   player.y = a.y - 70;
   player.vx = 0; player.vy = 0;
@@ -239,7 +261,6 @@ function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
 canvas.addEventListener("mousedown",(e)=>{
   if (hasLaunched) return;
 
-  // кликаем по области вокруг idleRig (примерно)
   const dx = e.offsetX - idleRig.x;
   const dy = e.offsetY - (idleRig.y - 70);
   if (dx*dx + dy*dy < 70*70){
@@ -255,7 +276,6 @@ canvas.addEventListener("mousemove",(e)=>{
   const dy = e.offsetY - a.y;
   const pull = Math.hypot(dx,dy);
 
-  // тянуть можно в любую сторону, но ограничиваем радиусом
   if (pull > CFG.maxPull){
     const k = CFG.maxPull / pull;
     player.x = a.x + dx*k;
@@ -272,13 +292,12 @@ canvas.addEventListener("mouseup",()=>{
 
   const a = anchorPoint();
 
-  // ВАЖНО: как Angry Birds — летит В ПРОТИВОПОЛОЖНУЮ сторону от “тяги”
-  // Если ты потянул влево (player.x < anchor.x) — (anchor - player) будет вправо => полетит вправо.
+  // ✅ Как Angry Birds: тянем назад — летит вперёд
   const dx = a.x - player.x;
   const dy = a.y - player.y;
 
   const pull = Math.hypot(dx,dy);
-  if (pull < 25) { // слабое натяжение — не запускаем, возвращаем idle
+  if (pull < 25) {
     player.x = a.x;
     player.y = a.y - 70;
     return;
@@ -294,7 +313,6 @@ document.getElementById("resetBtn").addEventListener("click", reset);
 
 /* ================== PHYSICS & COLLISIONS ================== */
 function rectHitCircle(rect, cx, cy, r){
-  // ближайшая точка прямоугольника к центру окружности
   const rx = rect.x - rect.w/2;
   const ry = rect.y - rect.h/2;
   const px = clamp(cx, rx, rx+rect.w);
@@ -305,9 +323,8 @@ function rectHitCircle(rect, cx, cy, r){
 }
 
 function updatePhysics(){
-  if (!hasLaunched) {
-    // пока idle — если тянем, показываем “player” как точку натяжения
-    if (!dragging) {
+  if (!hasLaunched){
+    if (!dragging){
       const a = anchorPoint();
       player.x = a.x;
       player.y = a.y - 70;
@@ -334,29 +351,23 @@ function updatePhysics(){
     }
   }
 
-  // столкновения с блоками
-  const r = 26; // радиус попадания для полёта
+  const r = 26;
   for (const b of level.blocks){
     if (b.hp <= 0) continue;
     if (rectHitCircle(b, player.x, player.y, r)){
-      // наносим урон от скорости
       const dmg = Math.min(35, Math.hypot(player.vx, player.vy) * 1.2);
       b.hp -= dmg;
-
-      // простой отскок
       player.vx *= -0.45;
       player.vy *= -0.35;
     }
   }
 
-  // “сбить работников”
   for (const d of level.dudes){
     if (!d.alive) continue;
     const dx = player.x - d.x;
     const dy = player.y - d.y;
     if (dx*dx + dy*dy < (d.r + r)*(d.r + r)){
       d.alive = false;
-      // небольшой отскок
       player.vx *= -0.25;
       player.vy *= -0.25;
     }
@@ -364,46 +375,10 @@ function updatePhysics(){
 }
 
 /* ================== RENDER ================== */
-function drawGround(){
-  ctx.fillStyle = "rgba(255,255,255,0.06)";
-  ctx.fillRect(0, canvas.height-CFG.floorYPad, canvas.width, 6);
-}
-
-function drawBlocks(){
-  for (const b of level.blocks){
-    if (b.hp <= 0) continue;
-    const k = clamp(b.hp/100, 0.25, 1);
-    ctx.fillStyle = `rgba(255,255,255,${0.08*k})`;
-    ctx.strokeStyle = `rgba(255,255,255,${0.18*k})`;
-    ctx.lineWidth = 2;
-
-    const x = b.x - b.w/2;
-    const y = b.y - b.h/2;
-    ctx.fillRect(x,y,b.w,b.h);
-    ctx.strokeRect(x,y,b.w,b.h);
-  }
-}
-
-function drawDudes(){
-  for (const d of level.dudes){
-    if (!d.alive) continue;
-    ctx.fillStyle = "rgba(255,255,255,0.92)";
-    ctx.beginPath();
-    ctx.arc(d.x,d.y,d.r,0,Math.PI*2);
-    ctx.fill();
-
-    // “наушники”
-    ctx.strokeStyle = "rgba(124,247,255,0.9)";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(d.x, d.y, d.r+4, Math.PI*0.15, Math.PI*0.85);
-    ctx.stroke();
-  }
-}
-
 function drawLaunchLine(){
   if (!dragging) return;
   const a = anchorPoint();
+
   ctx.strokeStyle="rgba(124,247,255,0.85)";
   ctx.lineWidth=3;
   ctx.beginPath();
@@ -411,7 +386,7 @@ function drawLaunchLine(){
   ctx.lineTo(player.x,player.y);
   ctx.stroke();
 
-  // стойка
+  // стойка (условная)
   ctx.fillStyle="rgba(255,255,255,0.10)";
   ctx.fillRect(a.x-10, a.y-60, 20, 130);
   ctx.fillStyle="rgba(124,247,255,0.18)";
@@ -421,24 +396,45 @@ function drawLaunchLine(){
 function drawPlayer(){
   const a = anchorPoint();
 
-  // ДО запуска: рисуем idle (чел на кресле) и качаем
+  // ✅ ДО запуска: idle + качание вперёд/назад (rotation)
   if (!hasLaunched){
     t += 1;
-    const rock = Math.sin(t*CFG.rockSpeed) * CFG.rockAmp;
-    const bob  = Math.abs(Math.sin(t*CFG.rockSpeed)) * 2;
+
+    const ang = Math.sin(t * CFG.rockSpeed) * (CFG.rockAngleDeg * Math.PI / 180);
 
     const w = 180, h = 180;
+
+    // pivot — точка опоры кресла
+    const pivotX = idleRig.x;
+    const pivotY = idleRig.y;
+
     ctx.save();
-    ctx.translate(idleRig.x + rock, idleRig.y + bob);
-    ctx.drawImage(IMG.idle, -w/2, -h/2, w, h);
+    ctx.translate(pivotX, pivotY);
+
+    // небольшой “боб” (можно убрать если не надо)
+    const bob = Math.abs(Math.sin(t * CFG.rockSpeed)) * 1.5;
+    ctx.translate(0, bob);
+
+    ctx.rotate(ang);
+
+    // важная подгонка: где у спрайта “низ кресла”
+    // можно подкрутить 0.62 (примерно 0.58–0.70)
+    ctx.drawImage(IMG.idle, -w/2, -h*0.62, w, h);
+
     ctx.restore();
     return;
   }
 
-  // ПОСЛЕ запуска: на старте остаётся пустой стул
-  ctx.drawImage(IMG.chair, chairEmpty.x-chairEmpty.w/2, chairEmpty.y-chairEmpty.h/2, chairEmpty.w, chairEmpty.h);
+  // ✅ ПОСЛЕ запуска: пустой стул остаётся
+  ctx.drawImage(
+    IMG.chair,
+    chairEmpty.x-chairEmpty.w/2,
+    chairEmpty.y-chairEmpty.h/2,
+    chairEmpty.w,
+    chairEmpty.h
+  );
 
-  // и летящий человек
+  // летящий человек
   const w = 130, h = 130;
   ctx.drawImage(IMG.fly, player.x-w/2, player.y-h/2, w, h);
 }
@@ -450,7 +446,6 @@ function loop(){
   drawDudes();
   drawLaunchLine();
   drawPlayer();
-
   updatePhysics();
   requestAnimationFrame(loop);
 }
@@ -471,8 +466,10 @@ function loop(){
     "beforeend",
     `<div style="margin-top:10px;color:#ffb4b4;font-size:12px">
       Ошибка загрузки: <code>${String(err.message||err)}</code><br>
-      Проверь, что файлы лежат по путям:<br>
-      <code>assets/player/chair.png</code>, <code>assets/player/human_idle.png</code>, <code>assets/player/human_fly.png</code>
+      Проверь файлы:<br>
+      <code>assets/player/chair.png</code><br>
+      <code>assets/player/human_idle.png</code><br>
+      <code>assets/player/human_fly.png</code>
     </div>`
   );
 });
