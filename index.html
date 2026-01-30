@@ -34,8 +34,9 @@
     button:hover{background:rgba(255,255,255,.10)}
     #goal{
       position:fixed; right:14px; top:12px; z-index:10; color:#d7f6ff;
-      width:320px;
+      width:340px;
     }
+
     #loading {
       position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
       background:radial-gradient(1200px 700px at 20% 20%, rgba(0,140,255,.25), rgba(0,0,0,.65));
@@ -72,8 +73,9 @@
   <div id="goal" class="panel">
     <div class="title">Цель</div>
     <div class="hint">
-      Развали офисный домик из стоек/балок/стекла/столов и мониторов.<br>
-      Домик сделан “1×1” и оставляет <b>место под менеджера</b> (готово в коде).
+      Развали <b>двухэтажный</b> офисный домик: <b>2 pillar</b> + <b>3 beam</b>.<br>
+      Стол/монитор/стекло убраны. <br>
+      <b>Место под менеджера</b> в центре (готово в коде).
     </div>
   </div>
 
@@ -92,26 +94,26 @@
 
   <script>
   (() => {
-    // ---------------------------
-    // Assets (chair.png НЕ используем — чтобы не было "стул на стуле")
-    // ---------------------------
-    const ASSETS = {
-      humanIdle: "./assets/player/human_idle.png", // человек на стуле (в одном спрайте)
+    // ===========================
+    // Assets
+    // ===========================
+    // ВАЖНО: chair.png НЕ используем вообще -> не будет "стул на стуле"
+    const ASSETS_REQUIRED = {
+      humanIdle: "./assets/player/human_idle.png", // человек + стул (одним спрайтом)
       humanFly:  "./assets/player/human_fly.png",  // человек в полёте
-      beam:      "./assets/office/beam.png",
-      pillar:    "./assets/office/pillar.png",
-      desk:      "./assets/office/desk.png",
-      monitor:   "./assets/office/monitor",
-      glass:     "./assets/office/glass.png",
+      beam:      "./assets/office/beam.png",       // деревянная балка (твоя новая)
+      pillar:    "./assets/office/pillar.png"      // деревянная стойка (твоя новая)
     };
 
-    // monitor path fix (на всякий случай, если ты назвал monitor.png)
-    // если у тебя monitor.png — раскомментируй следующую строку и удали строку monitor выше:
-    ASSETS.monitor = "./assets/office/monitor.png";
+    // Менеджер (пока можешь не загружать файл — игра не упадёт)
+    // Когда нарисуешь: положи сюда -> assets/manager/manager.png
+    const ASSETS_OPTIONAL = {
+      manager: "./assets/manager/manager.png"
+    };
 
-    // ---------------------------
+    // ===========================
     // Canvas
-    // ---------------------------
+    // ===========================
     const canvas = document.getElementById("c");
     const ctx = canvas.getContext("2d");
     function resize(){
@@ -122,18 +124,17 @@
     window.addEventListener("resize", () => { resize(); resetWorld(); });
     resize();
 
-    // ---------------------------
-    // Loader
-    // ---------------------------
+    // ===========================
+    // Loader UI
+    // ===========================
     const loadingEl = document.getElementById("loading");
     const pctEl = document.getElementById("pct");
     const barEl = document.getElementById("bar");
     const filesEl = document.getElementById("files");
 
     const img = {};
-    const keys = Object.keys(ASSETS);
 
-    function loadImage(key, url){
+    function loadImage(url){
       return new Promise((resolve, reject) => {
         const im = new Image();
         im.onload = () => resolve(im);
@@ -143,21 +144,45 @@
     }
 
     async function preload(){
+      const reqKeys = Object.keys(ASSETS_REQUIRED);
+      const optKeys = Object.keys(ASSETS_OPTIONAL);
+
+      filesEl.textContent = [
+        ...reqKeys.map(k => ASSETS_REQUIRED[k]),
+        ...optKeys.map(k => ASSETS_OPTIONAL[k] + " (optional)")
+      ].join("   •   ");
+
       let done = 0;
-      filesEl.textContent = keys.map(k => ASSETS[k]).join("   •   ");
-      for (const k of keys){
-        img[k] = await loadImage(k, ASSETS[k]);
+      const total = reqKeys.length + optKeys.length;
+
+      // required
+      for (const k of reqKeys){
+        img[k] = await loadImage(ASSETS_REQUIRED[k]);
         done++;
-        const p = Math.round((done/keys.length)*100);
+        const p = Math.round((done/total)*100);
         pctEl.textContent = p + "%";
         barEl.style.width = p + "%";
       }
+
+      // optional (не падаем если нет файла)
+      for (const k of optKeys){
+        try{
+          img[k] = await loadImage(ASSETS_OPTIONAL[k]);
+        }catch(e){
+          img[k] = null;
+        }
+        done++;
+        const p = Math.round((done/total)*100);
+        pctEl.textContent = p + "%";
+        barEl.style.width = p + "%";
+      }
+
       loadingEl.style.display = "none";
     }
 
-    // ---------------------------
+    // ===========================
     // Physics
-    // ---------------------------
+    // ===========================
     const G = 1700;
     const AIR = 0.994;
     const RESTITUTION = 0.16;
@@ -165,11 +190,8 @@
     const world = {
       groundY: () => window.innerHeight - 18,
 
-      // player placement (сделал ближе к центру и крупнее)
       playerX: 0,
       playerY: 0,
-
-      // anchor point for slingshot (будет обновляться от сидячего спрайта)
       anchor: { x: 0, y: 0 },
 
       aiming: false,
@@ -180,8 +202,8 @@
       proj: null,
       parts: [],
 
-      // manager slot (готово под добавление модели менеджера)
       managerSlot: null,
+      showManager: true // когда будет менеджер — просто оставь true
     };
 
     function ptInRect(px,py,r){
@@ -191,25 +213,25 @@
       return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
     }
 
-    // ---------------------------
-    // Build a more "1x1" building + space for manager
-    // ---------------------------
+    // ===========================
+    // Building: 2 pillar + 3 beam (2 floors)
+    // ===========================
     function buildOfficeLayout(){
       const W = window.innerWidth;
       const H = window.innerHeight;
 
-      // gap between player and building (СИЛЬНО меньше, чем было)
-      const GAP = Math.max(160, Math.min(240, W * 0.14));
+      // Дистанция между игроком и домом — ближе
+      const GAP = Math.max(110, Math.min(170, W * 0.10));
 
-      // building scale (чтобы был "квадратнее" и с запасом под менеджера)
-      const scale = Math.max(1.05, Math.min(1.35, W / 1250));
+      // Масштаб домика (чтобы был "1x1" и место под менеджера было шире)
+      const scale = Math.max(1.15, Math.min(1.55, W / 1150));
 
-      // building size target
-      const BW = 520 * scale;
-      const BH = 420 * scale;
+      // Габариты домика (квадратнее)
+      const BW = 560 * scale;
+      const BH = 430 * scale;
 
-      // place building near player
-      const baseX = Math.min(W - BW - 40, world.playerX + 260 + GAP);
+      // Позиция домика рядом с игроком
+      const baseX = Math.min(W - BW - 40, world.playerX + 280 + GAP);
       const baseY = H - BH - 40;
 
       const parts = [];
@@ -221,68 +243,82 @@
         });
       };
 
-      // --- frame: pillars + beams (квадратнее)
-      // bottom beam
-      add("beam",   baseX + 40*scale, baseY + 340*scale, 440*scale, 64*scale, 260, 1);
-      // mid beam
-      add("beam",   baseX + 60*scale, baseY + 210*scale, 400*scale, 64*scale, 260, 1);
-      // top beam/roof
-      add("beam",   baseX + 80*scale, baseY +  80*scale, 360*scale, 64*scale, 260, 1);
+      // pillar geometry
+      const pillarW = 90 * scale;
+      const pillarH = BH * 0.92;
 
-      // pillars (4)
-      add("pillar", baseX + 55*scale, baseY + 235*scale, 80*scale, 170*scale, 360, 0);
-      add("pillar", baseX + 405*scale,baseY + 235*scale, 80*scale, 170*scale, 360, 0);
-      add("pillar", baseX + 75*scale, baseY + 105*scale, 80*scale, 170*scale, 360, 0);
-      add("pillar", baseX + 385*scale,baseY + 105*scale, 80*scale, 170*scale, 360, 0);
+      // beam geometry
+      const beamH = 56 * scale;
+      const inset = 44 * scale;
 
-      // glass in the center (upper)
-      add("glass",  baseX + 160*scale, baseY + 120*scale, 240*scale, 110*scale, 160, 2);
+      const leftPillarX  = baseX + 10*scale;
+      const rightPillarX = baseX + BW - pillarW - 10*scale;
+      const pillarY      = baseY + (BH - pillarH);
 
-      // desks + monitors (lower floor) — оставляем центр чуть свободнее
-      add("desk",   baseX + 95*scale,  baseY + 260*scale, 170*scale, 105*scale, 190, 2);
-      add("monitor",baseX + 125*scale, baseY + 232*scale, 115*scale, 70*scale,  95, 3);
+      // 2 pillars
+      add("pillar", leftPillarX,  pillarY, pillarW, pillarH, 420, 0);
+      add("pillar", rightPillarX, pillarY, pillarW, pillarH, 420, 0);
 
-      add("desk",   baseX + 255*scale, baseY + 260*scale, 170*scale, 105*scale, 190, 2);
-      add("monitor",baseX + 285*scale, baseY + 232*scale, 115*scale, 70*scale,  95, 3);
+      // 3 beams = низ, перекрытие, верх (пересекаются по стойкам)
+      // Низ
+      add("beam",
+        leftPillarX + (pillarW*0.45),
+        baseY + BH - beamH - 6*scale,
+        (rightPillarX - leftPillarX) - (pillarW*0.90),
+        beamH,
+        320, 1
+      );
 
-      // upper desks + monitors (смещаем вправо, чтобы слева был "менеджер-спот")
-      add("desk",   baseX + 245*scale, baseY + 145*scale, 165*scale, 95*scale,  180, 2);
-      add("monitor",baseX + 275*scale, baseY + 118*scale, 110*scale, 65*scale,   95, 3);
+      // Перекрытие (межэтажное)
+      add("beam",
+        leftPillarX + (pillarW*0.38),
+        baseY + (BH*0.53),
+        (rightPillarX - leftPillarX) - (pillarW*0.76),
+        beamH,
+        320, 1
+      );
 
-      // Manager platform/space (реальное место под менеджера)
-      // небольшая "полка" слева сверху — менеджер будет стоять/сидеть тут
-      add("beam",   baseX + 95*scale, baseY + 140*scale, 130*scale, 52*scale, 200, 1);
+      // Верх (крышa)
+      add("beam",
+        leftPillarX + (pillarW*0.45),
+        baseY + 14*scale,
+        (rightPillarX - leftPillarX) - (pillarW*0.90),
+        beamH,
+        320, 1
+      );
 
-      // slot rect for future manager sprite (не рисуем менеджера, но место есть)
+      // Слот под менеджера (центр верхнего этажа)
+      // Делаем шире, чтобы "влезал" менеджер.
       world.managerSlot = {
-        x: baseX + 110*scale,
-        y: baseY + 70*scale,
-        w: 110*scale,
-        h: 130*scale,
-        hp: 9999
+        x: baseX + BW*0.40,
+        y: baseY + BH*0.12,
+        w: BW*0.22,
+        h: BH*0.34
       };
 
       return parts;
     }
 
+    // Урон/ломание
     function applyHit(part, impulse){
       if (part.broken) return;
-      const dmg = Math.max(10, impulse * 0.13);
+      const dmg = Math.max(10, impulse * 0.14);
       part.hp -= dmg;
+
       if (part.hp <= 0){
         part.broken = true;
-        part.vx += (Math.random()*2-1) * 180;
-        part.vy -= 160 + Math.random()*120;
-        part.vang += (Math.random()*2-1) * 2.4;
+        part.vx += (Math.random()*2-1) * 220;
+        part.vy -= 190 + Math.random()*120;
+        part.vang += (Math.random()*2-1) * 2.7;
       }
     }
 
-    // ---------------------------
-    // Player (сильно больше)
-    // ---------------------------
-    const PLAYER_SCALE = 1.75; // ← существенно больше
+    // ===========================
+    // Player
+    // ===========================
+    const PLAYER_SCALE = 1.75;
+
     function seatedRect(){
-      // click area around seated sprite
       const w = 120 * PLAYER_SCALE;
       const h = 120 * PLAYER_SCALE;
       return { x: world.playerX, y: world.playerY, w, h };
@@ -296,16 +332,16 @@
       world.launched = false;
       world.proj = null;
 
-      // player position closer to center and higher
-      world.playerX = Math.max(40, Math.min(180, W * 0.09));
+      // игрок крупный, ближе к центру
+      world.playerX = Math.max(40, Math.min(210, W * 0.10));
       world.playerY = H - (170 * PLAYER_SCALE) - 40;
 
       world.parts = buildOfficeLayout();
     }
 
-    // ---------------------------
-    // Slingshot control (тянем назад -> летим вперед)
-    // ---------------------------
+    // ===========================
+    // Slingshot (тянем назад -> летим вперед)
+    // ===========================
     function startAiming(px,py){
       if (world.launched) return;
       const r = seatedRect();
@@ -318,7 +354,7 @@
 
     function updatePull(){
       const maxLen = 220;
-      // ВАЖНО: anchor - pointer (так направление правильное)
+      // anchor - pointer (правильное направление)
       const dx = world.anchor.x - world.pointer.x;
       const dy = world.anchor.y - world.pointer.y;
       const len = Math.hypot(dx,dy) || 1;
@@ -366,9 +402,9 @@
 
     document.getElementById("resetBtn").addEventListener("click", resetWorld);
 
-    // ---------------------------
+    // ===========================
     // Draw
-    // ---------------------------
+    // ===========================
     function drawBackground(){
       const W = window.innerWidth, H = window.innerHeight;
       const g = ctx.createRadialGradient(W*0.2,H*0.2,50, W*0.2,H*0.2, Math.max(W,H));
@@ -406,29 +442,25 @@
         ctx.restore();
       }
 
-      // manager slot (место есть, но менеджера пока нет)
-      if (world.managerSlot){
-        ctx.save();
-        ctx.globalAlpha = 0.0; // ← не показываем рамку, но слот существует
-        ctx.fillStyle = "rgba(255,255,255,0.06)";
-        ctx.fillRect(world.managerSlot.x, world.managerSlot.y, world.managerSlot.w, world.managerSlot.h);
-        ctx.restore();
+      // Менеджер (если картинка появится)
+      if (world.showManager && world.managerSlot && img.manager){
+        const s = world.managerSlot;
+        drawImageFit(img.manager, s.x, s.y, s.w, s.h);
       }
     }
 
-    // сидячий спрайт (он уже со стулом) + качание вперед/назад
+    // Сидячий спрайт (уже со стулом) + качание вперед/назад
     function drawSeatedHuman(t){
       if (world.launched) return;
 
       const im = img.humanIdle;
-
       const w = 140 * PLAYER_SCALE;
       const h = 140 * PLAYER_SCALE;
 
       const x = world.playerX;
       const y = world.playerY;
 
-      // качание вперед/назад (rotate around bottom)
+      // качание вперед/назад
       const rock = Math.sin(t*2.2) * 0.14;
       const bob  = Math.sin(t*3.1) * 2.4;
 
@@ -439,7 +471,7 @@
       drawImageFit(im, x, y + bob, w, h);
       ctx.restore();
 
-      // anchor point (где тянем/откуда летим)
+      // anchor point
       world.anchor.x = x + w*0.62;
       world.anchor.y = y + h*0.50;
     }
@@ -467,6 +499,7 @@
       ctx.beginPath(); ctx.arc(px,py,20,0,Math.PI*2); ctx.fill(); ctx.stroke();
     }
 
+    // В полёте — ТОЛЬКО человек (без стула)
     function drawProjectile(){
       if (!world.proj) return;
       const p = world.proj;
@@ -483,9 +516,9 @@
       ctx.restore();
     }
 
-    // ---------------------------
+    // ===========================
     // Step
-    // ---------------------------
+    // ===========================
     function step(dt){
       const ground = world.groundY();
 
@@ -559,9 +592,9 @@
       }
     }
 
-    // ---------------------------
+    // ===========================
     // Loop
-    // ---------------------------
+    // ===========================
     let last = performance.now();
     function loop(now){
       const dt = Math.min(0.033, (now-last)/1000);
