@@ -34,6 +34,7 @@
       backdrop-filter: blur(10px);
       box-shadow:0 10px 30px rgba(0,0,0,.35);
       user-select:none;
+      z-index: 5;
     }
     .badge{
       padding:6px 10px;border-radius:999px;
@@ -75,6 +76,7 @@
       box-shadow:0 10px 30px rgba(0,0,0,.35);
       font-size:12px;color:var(--muted);
       user-select:none;
+      z-index: 5;
     }
     .tip b{color:var(--text)}
     .hint{
@@ -87,6 +89,7 @@
       font-size:12px;color:var(--muted);
       user-select:none;
       display:flex;gap:10px;align-items:center;
+      z-index: 5;
     }
     .dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.35)}
     .dot.ok{background:var(--ok)}
@@ -100,7 +103,7 @@
       z-index: 50;
     }
     .loaderCard{
-      width:min(520px, 92vw);
+      width:min(560px, 92vw);
       border-radius:18px;
       border:1px solid rgba(255,255,255,.12);
       background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05));
@@ -123,7 +126,7 @@
       border-radius:999px;
       transition: width .2s ease;
     }
-    .loaderText{margin-top:10px;font-size:12px;color:var(--muted);line-height:1.35}
+    .loaderText{margin-top:10px;font-size:12px;color:var(--muted);line-height:1.35;white-space:pre-wrap}
     code{background: rgba(255,255,255,.08); padding:2px 6px; border-radius:8px}
   </style>
 </head>
@@ -159,11 +162,11 @@
       </div>
       <div class="bar"><div id="loaderBar"></div></div>
       <div class="loaderText" id="loaderText">
-        Если застрянет на 0% — проверь, что файлы лежат по путям:
-        <br/>
-        <code>assets/player/chair.png</code>,
-        <code>assets/player/human_idle.png</code>,
-        <code>assets/player/human_fly.png</code>
+Если застрянет на 0% — это значит ассеты не отдаются с GitHub Pages.
+Этот билд умеет подхватывать файлы по очереди:
+1) GitHub Pages
+2) jsDelivr CDN
+3) raw.githubusercontent
       </div>
     </div>
   </div>
@@ -197,61 +200,86 @@
     humanFly: null
   };
 
-  function loadImage(src, onProgress) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error(`Не могу загрузить: ${src}`));
-      img.src = src;
-      if (onProgress) onProgress(src);
-    });
+  // --- ASSET SOURCES (Pages -> jsDelivr -> raw) ---
+  const GH_USER = "mrsvh879";
+  const GH_REPO = "happyshatrov";
+
+  // базовый путь для project pages: /<repo>/
+  const PAGES_BASE = (() => {
+    const parts = location.pathname.split("/").filter(Boolean); // ["happyshatrov", ...]
+    const repo = parts.length ? parts[0] : GH_REPO;
+    return `${location.origin}/${repo}/`;
+  })();
+
+  const ASSET_BASES = [
+    PAGES_BASE, // GitHub Pages
+    `https://cdn.jsdelivr.net/gh/${GH_USER}/${GH_REPO}@main/`, // CDN
+    `https://raw.githubusercontent.com/${GH_USER}/${GH_REPO}/main/` // fallback
+  ];
+
+  async function loadImageFromAnyBase(relPath) {
+    let lastErr = null;
+
+    for (const base of ASSET_BASES) {
+      const url = base + relPath + `?v=${Date.now()}`; // анти-кеш
+      try {
+        const img = await new Promise((resolve, reject) => {
+          const i = new Image();
+          const t = setTimeout(() => reject(new Error("timeout")), 8000);
+          i.onload = () => { clearTimeout(t); resolve(i); };
+          i.onerror = () => { clearTimeout(t); reject(new Error("load error")); };
+          i.src = url;
+        });
+        console.log("✅ asset loaded:", url);
+        return img;
+      } catch (e) {
+        console.warn("❌ asset failed:", base + relPath, e);
+        lastErr = e;
+      }
+    }
+    throw new Error(`Не могу загрузить ассет: ${relPath}. Последняя ошибка: ${lastErr}`);
   }
 
   async function loadAllAssets() {
     const list = [
-      { key: "chair", src: "assets/player/chair.png" },
-      { key: "humanIdle", src: "assets/player/human_idle.png" },
-      { key: "humanFly", src: "assets/player/human_fly.png" },
+      { key: "chair",     rel: "assets/player/chair.png" },
+      { key: "humanIdle", rel: "assets/player/human_idle.png" },
+      { key: "humanFly",  rel: "assets/player/human_fly.png" },
     ];
 
     let loaded = 0;
     const total = list.length;
 
-    function setProgress(extraText) {
+    for (const item of list) {
+      loaderText.textContent = "Гружу: " + item.rel + "\n\nПробую источники:\n- " + ASSET_BASES.join("\n- ");
+      const img = await loadImageFromAnyBase(item.rel);
+      IMG[item.key] = img;
+
+      loaded++;
       const pct = Math.round((loaded / total) * 100);
       loaderBar.style.width = pct + "%";
       loaderPct.textContent = pct + "%";
-      if (extraText) loaderText.textContent = extraText;
-    }
-
-    setProgress();
-
-    for (const item of list) {
-      const img = await loadImage(item.src);
-      IMG[item.key] = img;
-      loaded++;
-      setProgress();
-    }
-
-    // quick sanity
-    if (!IMG.chair || !IMG.humanIdle || !IMG.humanFly) {
-      throw new Error("Ассеты не загрузились полностью.");
     }
   }
 
   function showAssetsOk() {
+    assetDot.classList.remove('bad');
     assetDot.classList.add('ok');
     assetHintText.textContent = 'Ассеты подключены ✅';
   }
 
   function showAssetsBad(msg) {
+    assetDot.classList.remove('ok');
     assetDot.classList.add('bad');
-    assetHintText.textContent = 'Ассеты НЕ загрузились ❯োগибка';
+    assetHintText.textContent = 'Ассеты НЕ загрузились ❌';
+
     loaderText.textContent =
-      msg + "\n\nПроверь:\n" +
-      "1) папки/имена в репо (регистр важен)\n" +
-      "2) пути: assets/player/chair.png, human_idle.png, human_fly.png\n" +
-      "3) что GitHub Pages действительно обновился (иногда кеш)";
+      "Ошибка загрузки ассетов:\n" + msg + "\n\n" +
+      "Проверь:\n" +
+      "1) что репо публичный\n" +
+      "2) что файлы существуют в main: assets/player/*.png\n" +
+      "3) если Pages не отдает — CDN (jsDelivr) подтянет в течение минуты\n\n" +
+      "Если не подтянуло: открой консоль и пришли строку 'asset failed' (там будет причина).";
   }
 
   // ---------- ENGINE ----------
@@ -505,7 +533,7 @@
     render.canvas.addEventListener('touchstart', e => e.preventDefault(), { passive:false });
     render.canvas.addEventListener('touchmove', e => e.preventDefault(), { passive:false });
 
-    // --- FIX: launch direction = "куда натянул — туда полетел"
+    // --- launch direction: куда натянул — туда полетел ---
     Events.off(mouseConstraint, 'enddrag');
     Events.on(mouseConstraint, 'enddrag', (evt) => {
       if (evt.body !== projectile) return;
@@ -608,17 +636,14 @@
     // --- DRAW PLAYER (PNG) ---
     const isFlying = !(slingConstraint && slingConstraint.bodyB);
 
-    // размеры/смещения под твои PNG (можно потом подстроить)
-    // стул (чуть ниже)
+    // стул
     drawImageOnBody(ctx, projectile, IMG.chair, 160, 160, 0, 25);
 
     // человек
     const humanImg = isFlying ? IMG.humanFly : IMG.humanIdle;
     if (isFlying) {
-      // летящий чуть впереди и выше
       drawImageOnBody(ctx, projectile, humanImg, 170, 170, 35, -35);
     } else {
-      // сидящий ровно на стуле
       drawImageOnBody(ctx, projectile, humanImg, 180, 180, 20, -35);
     }
 
@@ -649,11 +674,10 @@
 
       showAssetsOk();
 
-      // небольшая пауза, чтобы пользователь видел 100%
       setTimeout(() => {
         loaderEl.style.display = 'none';
         buildLevel();
-      }, 250);
+      }, 200);
 
     } catch (e) {
       console.error(e);
