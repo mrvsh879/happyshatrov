@@ -119,7 +119,7 @@
     let draggingBird = false;
     let canLaunch = true;
 
-    let chairAfterLaunch = null; // стул появляется ТОЛЬКО после броска
+    let chairAfterLaunch = null;
     let DEBUG = false;
 
     const structure = {
@@ -242,9 +242,11 @@
       mouse = Mouse.create(canvas);
       mouse.pixelRatio = render.options.pixelRatio;
 
+      // MouseConstraint используем только как источник событий/координат.
+      // Делам его почти "безсиловым", чтобы он не мешал пружине/выстрелу.
       mouseConstraint = MouseConstraint.create(engine, {
         mouse,
-        constraint: { stiffness: 0.14, damping: 0.16, render: { visible:false } }
+        constraint: { stiffness: 0.00001, damping: 0.9, render: { visible:false } }
       });
       World.add(world, mouseConstraint);
       render.mouse = mouse;
@@ -298,7 +300,6 @@
       slingshot = null;
       slingAnchor = null;
 
-      // убрать стул (если был после прошлого броска)
       if (chairAfterLaunch){
         World.remove(world, chairAfterLaunch);
         chairAfterLaunch = null;
@@ -465,7 +466,6 @@
       bird.render.sprite.yScale = bird.__idleScale;
     }
 
-    // ВАЖНО: здесь мы НЕ создаём стул. Стул создаётся только в момент броска (mouseup).
     function setupSlingshot(){
       const start = bird.__start;
       slingAnchor = { x: start.x, y: start.y };
@@ -491,7 +491,6 @@
     }
 
     function spawnChairAfterLaunch(IMGS, atPos){
-      // защита от "стул на стуле" если вдруг повторный вызов
       if (chairAfterLaunch){
         World.remove(world, chairAfterLaunch);
         chairAfterLaunch = null;
@@ -531,7 +530,6 @@
           slingshot = null;
         }
 
-        // стул должен исчезать на респавне (как в Angry Birds: новый выстрел — новое "место старта")
         if (chairAfterLaunch){
           World.remove(world, chairAfterLaunch);
           chairAfterLaunch = null;
@@ -660,6 +658,38 @@
       Render.lookAt(render, { min: render.bounds.min, max: render.bounds.max });
     }
 
+    // ======= ВАЖНОЕ ИСПРАВЛЕНИЕ "РОГАТКИ" =======
+    // Вместо надежды на constraint (который мы убиваем обнулением velocity во время drag),
+    // мы на mouseup вычисляем натяжение и задаем скорость вручную.
+    function launchBirdFromTension(){
+      if (!bird || !slingAnchor) return;
+
+      const pull = Vector.sub(slingAnchor, bird.position); // куда тянули (anchor - pos)
+      const dist = Vector.magnitude(pull);
+
+      // max натяжение как в drag
+      const pullMax = 220;
+      const d = Math.min(dist, pullMax);
+
+      if (d < 6) return; // почти не тянул — не стрелять
+
+      // Нормализуем направление
+      const dir = Vector.normalise(pull);
+
+      // Коэффициент силы: подстроен, чтобы реально "стреляло" по домикам
+      // Если хочешь сильнее/слабее — меняй LAUNCH_K (0.055..0.085 обычно ок)
+      const LAUNCH_K = 0.070;
+
+      const vel = Vector.mult(dir, d * LAUNCH_K);
+
+      // Прямо задаём скорость (и чуть стабилизируем вращение)
+      Body.setVelocity(bird, vel);
+      Body.setAngularVelocity(bird, 0);
+
+      // Чтобы не было "прилипания" к якорю из-за микроколлизий
+      bird.frictionAir = 0.010;
+    }
+
     function bindGameplay(IMGS){
       Events.on(mouseConstraint, "mousedown", ()=>{
         if (!bird || birdLaunched || !canLaunch) return;
@@ -680,7 +710,7 @@
         let dx = mp.x - start.x;
         let dy = mp.y - start.y;
 
-        // запрещаем тянуть вправо (dx > 0)
+        // запрещаем тянуть вправо
         if (dx > 0) dx = 0;
 
         const pullMax = 220;
@@ -706,9 +736,13 @@
         activateStructure();
         setBirdFly();
 
-        // СТУЛ ПОЯВЛЯЕТСЯ ТОЛЬКО СЕЙЧАС (после броска)
+        // стул появляется после броска
         spawnChairAfterLaunch(IMGS, bird.__start);
 
+        // === фикс запуска: задаём скорость по натяжению ===
+        launchBirdFromTension();
+
+        // отцепляем "резинку" визуально/логически
         detachSlingshot();
 
         birdLaunched = true;
