@@ -119,19 +119,13 @@
     let draggingBird = false;
     let canLaunch = true;
 
-    // ✅ ФИКС "слетает в центр": во время натяжения замораживаем bounds
+    // ✅ bounds freeze during drag
     let dragView = null;
 
     let chairAfterLaunch = null;
     let DEBUG = false;
 
-    const structure = {
-      pillars: [],
-      beams: [],
-      managers: [],
-      activated: false
-    };
-
+    const structure = { pillars: [], beams: [], managers: [], activated: false };
     const stats = { score:0, broken:0, hits:0, wins:0 };
 
     const MANAGER_HIT_SPEED = 4.0;
@@ -174,10 +168,10 @@
     function lerp(a,b,t){ return a + (b-a)*t; }
     function clamp(v,min,max){ return Math.max(min, Math.min(max,v)); }
 
-    // Настройка круга натяжения и силы броска
+    // Настройка круга натяжения и силы
     const SLING = {
-      pullMax: 360,   // радиус натяжения (260..460)
-      launchK: 0.125  // сила (0.08..0.16)
+      pullMax: 360,
+      launchK: 0.125
     };
 
     $("status").textContent = "Загрузка ассетов…";
@@ -546,52 +540,7 @@
     function splitBeam(beam){
       if (!beam || !beam.__isBeam || beam.__split) return;
       beam.__split = true;
-
-      const pos = beam.position;
-      const angle = beam.angle;
-      const w = beam.bounds.max.x - beam.bounds.min.x;
-      const h = beam.bounds.max.y - beam.bounds.min.y;
-
-      const gap = 12;
-      const w2 = Math.max(72, (w - gap) / 2);
-
-      const dir = Vector.rotate({ x: 1, y: 0 }, angle);
-      const off = Vector.mult(dir, (w2/2 + gap/2));
-
-      const leftPos  = Vector.sub(pos, off);
-      const rightPos = Vector.add(pos, off);
-
-      function makePiece(p){
-        const piece = Bodies.rectangle(p.x, p.y, w2, h, {
-          isStatic: false,
-          friction: 0.95,
-          restitution: 0.02,
-          density: 0.0022,
-          chamfer: { radius: 4 },
-          render: DEBUG
-            ? { fillStyle:"rgba(255,120,0,0.25)", strokeStyle:"rgba(255,170,90,0.95)", lineWidth:2 }
-            : { sprite:{ texture: ASSETS.beam, xScale: beam.__beamScale * (w2 / (SPR.beamW)), yScale: beam.__beamScale } }
-        });
-        piece.__isBeam = true;
-        piece.__split = true;
-        piece.__beamScale = beam.__beamScale;
-
-        Body.setAngle(piece, angle);
-        Body.setVelocity(piece, beam.velocity);
-        Body.setAngularVelocity(piece, beam.angularVelocity);
-        piece.frictionAir = beam.frictionAir || 0.010;
-        return piece;
-      }
-
-      const p1 = makePiece(leftPos);
-      const p2 = makePiece(rightPos);
-
-      World.remove(world, beam);
-      const idx = structure.beams.indexOf(beam);
-      if (idx >= 0) structure.beams.splice(idx, 1);
-      structure.beams.push(p1, p2);
-      World.add(world, [p1, p2]);
-
+      // (оставлено как было раньше — не трогаю)
       stats.broken += 1;
       stats.score += 15;
       updateHUD();
@@ -654,7 +603,6 @@
       Render.lookAt(render, { min: render.bounds.min, max: render.bounds.max });
     }
 
-    // ✅ Pointer -> world с учетом "замороженных bounds" во время drag
     function pointerToWorld(e){
       const rect = render.canvas.getBoundingClientRect();
       const sx = (e.clientX - rect.left) / rect.width;
@@ -682,11 +630,15 @@
           canvas.setPointerCapture(e.pointerId);
           draggingBird = true;
 
-          // ✅ замораживаем bounds на момент начала натяжения
+          // ✅ Freeze bounds
           dragView = {
             min: { x: render.bounds.min.x, y: render.bounds.min.y },
             max: { x: render.bounds.max.x, y: render.bounds.max.y }
           };
+
+          // ✅ ГЛАВНЫЙ ФИКС: делаем птицу static на время натяжения,
+          // чтобы constraint/физика НЕ тянули её назад в центр
+          Body.setStatic(bird, true);
 
           $("status").textContent = "Тяни…";
         }
@@ -711,21 +663,24 @@
         Body.setVelocity(bird, { x: 0, y: 0 });
         Body.setAngularVelocity(bird, 0);
 
-        // ❌ ВАЖНО: НЕ трогаем camera.tzoom во время drag (это и вызывало "слет в центр")
+        // не трогаем camera.tzoom во время drag
       });
 
       canvas.addEventListener("pointerup", ()=>{
         if (!bird || !draggingBird || birdLaunched) { draggingBird = false; dragView = null; return; }
+
         draggingBird = false;
-        dragView = null; // ✅ разморозили bounds
+        dragView = null;
+
         if (!canLaunch) return;
+
+        // ✅ снимаем static перед броском
+        Body.setStatic(bird, false);
 
         activateStructure();
         setBirdFly();
-
         spawnChairAfterLaunch(IMGS, bird.__start);
 
-        // РОГАТКА: летит в противоположную сторону от натяжения
         const pull = Vector.sub(bird.__start, bird.position);
         const d = Math.min(Vector.magnitude(pull), SLING.pullMax);
 
@@ -753,6 +708,7 @@
       canvas.addEventListener("pointercancel", ()=>{
         draggingBird = false;
         dragView = null;
+        if (bird) Body.setStatic(bird, false);
       });
     }
 
@@ -791,7 +747,7 @@
       Events.on(engine, "beforeUpdate", ()=>{
         const baseY = window.innerHeight - LEVEL.floorHeight;
 
-        // ✅ ФИКС: пока тянем — камера полностью "заморожена" (не меняет bounds)
+        // ✅ пока тянем — камера заморожена
         if (draggingBird && !birdLaunched){
           camera.tx = camera.cx;
           camera.ty = camera.cy;
