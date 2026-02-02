@@ -313,6 +313,8 @@
     // ассеты
     const ASSETS = {
       bg: "assets/bg_office.png",
+      ground: "assets/ground/ground.png",   // ✅ ДОБАВИЛИ ПОЛ
+
       beam: "assets/office/beam.png",
       pillar: "assets/office/pillar.png",
       manager: "assets/office/manager.png",
@@ -320,6 +322,16 @@
       humanFly: "assets/player/human_fly.png",
       chair: "assets/player/chair.png",
       superSkin: "assets/player/human_idle.png"
+    };
+
+    // ✅ ВИЗУАЛ ПОЛА (только рисование, не влияет на физику)
+    const GROUND_VIS = {
+      hWorld: 220,        // высота полосы пола в world-единицах
+      overlap: 2,         // чтобы не было щели
+      shadeAlpha: 0.10,   // лёгкое затемнение для “объёма”
+      autoCrop: true,     // авто-обрезка прозрачных/чёрных зон сверху/снизу
+      cropThreshold: 18,
+      cropPadding: 6
     };
 
     const {
@@ -529,6 +541,8 @@
 
     Promise.all([
       loadImage(ASSETS.bg),
+      loadImage(ASSETS.ground),   // ✅ грузим пол
+
       loadImage(ASSETS.beam),
       loadImage(ASSETS.pillar),
       loadImage(ASSETS.manager),
@@ -536,8 +550,8 @@
       loadImage(ASSETS.humanFly),
       loadImage(ASSETS.chair),
       loadImage(ASSETS.superSkin)
-    ]).then(([imgBg, imgBeam, imgPillar, imgManager, imgIdle, imgFly, imgChair, imgSuper])=>{
-      start({imgBg, imgBeam, imgPillar, imgManager, imgIdle, imgFly, imgChair, imgSuper});
+    ]).then(([imgBg, imgGround, imgBeam, imgPillar, imgManager, imgIdle, imgFly, imgChair, imgSuper])=>{
+      start({imgBg, imgGround, imgBeam, imgPillar, imgManager, imgIdle, imgFly, imgChair, imgSuper});
     }).catch((e)=>{
       console.error(e);
       $("status").textContent = "Ошибка PNG";
@@ -558,8 +572,61 @@
       }
     }
 
+    // ✅ авто-обрезка “пустых” зон у ground.png
+    function prepareGroundCrop(img){
+      img.__cropY = 0;
+      img.__cropH = img.height;
+
+      if (!GROUND_VIS.autoCrop) return;
+
+      const c = document.createElement("canvas");
+      c.width = img.width;
+      c.height = img.height;
+      const ctx = c.getContext("2d", { willReadFrequently:true });
+      ctx.drawImage(img, 0, 0);
+
+      const data = ctx.getImageData(0, 0, img.width, img.height).data;
+      const thr = GROUND_VIS.cropThreshold;
+      const rowMean = new Float32Array(img.height);
+
+      for (let y=0; y<img.height; y++){
+        let sum = 0;
+        let count = 0;
+        const rowStart = y * img.width * 4;
+        for (let x=0; x<img.width; x++){
+          const i = rowStart + x*4;
+          const r = data[i], g = data[i+1], b = data[i+2];
+          const m = (r + g + b) / 3;
+          sum += m;
+          count++;
+        }
+        rowMean[y] = sum / Math.max(1, count);
+      }
+
+      let top = -1, bottom = -1;
+      for (let y=0; y<img.height; y++){
+        if (rowMean[y] > thr){ top = y; break; }
+      }
+      for (let y=img.height-1; y>=0; y--){
+        if (rowMean[y] > thr){ bottom = y; break; }
+      }
+
+      // если ничего не нашли — оставляем как есть
+      if (top === -1 || bottom === -1 || bottom - top < 20) return;
+
+      const pad = GROUND_VIS.cropPadding;
+      top = Math.max(0, top - pad);
+      bottom = Math.min(img.height-1, bottom + pad);
+
+      img.__cropY = top;
+      img.__cropH = (bottom - top + 1);
+    }
+
     function start(IMGS){
       $("status").textContent = "Запуск…";
+
+      // ✅ подготовка кропа для пола
+      prepareGroundCrop(IMGS.imgGround);
 
       const canvas = $("c");
       const wrap = $("wrap");
@@ -582,7 +649,10 @@
           width: window.innerWidth,
           height: window.innerHeight,
           wireframes: false,
-          background: ASSETS.bg,
+
+          // ✅ ВАЖНО: делаем прозрачным, чтобы Matter не “затирал” наш пол
+          background: "transparent",
+
           pixelRatio: dpr(),
           hasBounds: true
         }
@@ -612,6 +682,14 @@
         ctx.save();
         ctx.setTransform(1, 0, 0, 1, 0, 0);
 
+        // ✅ Рисуем ФОН + ПОЛ “СНИЗУ”, чтобы не ломать остальной рендер
+        // destination-over = рисует позади уже нарисованных тел
+        ctx.globalCompositeOperation = "destination-over";
+        ctx.drawImage(IMGS.imgBg, 0, 0, render.canvas.width, render.canvas.height);
+        drawGround(IMGS);
+        ctx.globalCompositeOperation = "source-over";
+
+        // ---- дальше всё как было (НИЧЕГО НЕ ВЫКИНУТО) ----
         if (AIM.enabled) drawAimTrajectory();
         if (chairDecal) drawChairDecal(IMGS);
         drawSuperOverlay();
@@ -664,6 +742,10 @@
       render.options.pixelRatio = dpr();
       render.options.width = window.innerWidth;
       render.options.height = window.innerHeight;
+
+      // ✅ пересчитать кроп пола при смене размеров (без влияния на механику)
+      prepareGroundCrop(IMGS.imgGround);
+
       resetAll(IMGS);
       if (!GAME_STARTED) showMenu();
     }
@@ -1229,6 +1311,71 @@
       };
     }
 
+    // ✅ нужно для пола (размеры world -> screen)
+    function worldSizeToScreen(w, h){
+      const b = render.bounds;
+      const vw = (b.max.x - b.min.x);
+      const vh = (b.max.y - b.min.y);
+      return {
+        w: (w / vw) * render.canvas.width,
+        h: (h / vh) * render.canvas.height
+      };
+    }
+
+    // ✅ РЕНДЕР ПОЛА (без влияния на физику)
+    function drawGround(IMGS){
+      if (!IMGS || !IMGS.imgGround) return;
+
+      const img = IMGS.imgGround;
+      const b = render.bounds;
+
+      const baseY = window.innerHeight - LEVEL.floorHeight;
+      const topY = baseY - GROUND_VIS.overlap;
+      const hWorld = GROUND_VIS.hWorld + GROUND_VIS.overlap;
+
+      const srcY = (typeof img.__cropY === "number") ? img.__cropY : 0;
+      const srcH = (typeof img.__cropH === "number") ? img.__cropH : img.height;
+
+      // высоту задаём в world, чтобы при зуме выглядело естественно
+      const scale = hWorld / srcH;
+      const tileWWorld = img.width * scale;
+
+      const xStart = Math.floor((b.min.x - tileWWorld) / tileWWorld) * tileWWorld;
+      const xEnd = b.max.x + tileWWorld;
+
+      const tileSizePx = worldSizeToScreen(tileWWorld, hWorld);
+      const tileWpx = tileSizePx.w;
+      const tileHpx = tileSizePx.h;
+
+      const sY = worldToScreen(0, topY).y;
+
+      const ctx = render.context;
+      ctx.save();
+
+      for (let x = xStart; x <= xEnd; x += tileWWorld){
+        const sX = worldToScreen(x, topY).x;
+        ctx.drawImage(
+          img,
+          0, srcY, img.width, srcH,
+          sX, sY, tileWpx, tileHpx
+        );
+      }
+
+      // лёгкая тень для “массы”
+      if (GROUND_VIS.shadeAlpha > 0){
+        ctx.globalAlpha = GROUND_VIS.shadeAlpha;
+        ctx.fillStyle = "rgba(0,0,0,1)";
+        const left = worldToScreen(b.min.x, topY).x;
+        const right = worldToScreen(b.max.x, topY).x;
+        const width = (right - left);
+        const height = worldSizeToScreen(0, hWorld).h;
+        ctx.fillRect(left, sY, width, height);
+        ctx.globalAlpha = 1;
+      }
+
+      ctx.restore();
+    }
+
     function drawAimTrajectory(){
       if (!bird || birdLaunched || !draggingBird || !canLaunch) return;
 
@@ -1279,8 +1426,8 @@
       }
 
       const sc = worldToScreen(start.x, start.y);
-      const b = render.bounds;
-      const vw = (b.max.x - b.min.x);
+      const bb = render.bounds;
+      const vw = (bb.max.x - bb.min.x);
       const rPx = (SLING.pullMax / vw) * render.canvas.width;
 
       ctx.beginPath();
