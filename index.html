@@ -54,7 +54,7 @@
     <div class="panel">
       <h1>Office Birds — Destruction</h1>
       <small><b>Управление:</b> зажми человечка → тяни в любую сторону → отпусти (летит в противоположную).</small>
-      <small><b>SUPER:</b> нажми кнопку во время попытки → урон x2.5, стул “качается”.</small>
+      <small><b>SUPER:</b> нажми кнопку во время попытки → урон x2.5 + “качание на стуле” + баннер.</small>
       <div class="kv">
         <div>Счёт:</div><div id="score">0</div>
         <div>Сломано:</div><div id="broken">0</div>
@@ -74,7 +74,7 @@
     <div class="panel">
       <h1>Цель</h1>
       <small>Выбей всех менеджеров 🏆</small>
-      <small>Камера следит за полётом, не двигается во время натяжения. Сильный удар → тряска.</small>
+      <small>Сильный удар → шейк камеры. SUPER → затемнение + надпись.</small>
       <div class="kv">
         <div>Статус:</div><div id="status">Загрузка…</div>
         <div>SUPER:</div><div id="superState">OFF</div>
@@ -115,7 +115,10 @@
       manager: "assets/office/manager.png",
       humanIdle: "assets/player/human_idle.png",
       humanFly: "assets/player/human_fly.png",
-      chair: "assets/player/chair.png"
+      chair: "assets/player/chair.png",
+
+      // ✅ SUPER скин: сейчас это chair.png (если у тебя есть "human_on_chair.png" — замени на него)
+      superSkin: "assets/player/chair.png"
     };
 
     const {
@@ -135,24 +138,29 @@
     let draggingBird = false;
     let canLaunch = true;
 
-    // bounds freeze during drag (фикс "слетает в центр")
+    // bounds freeze during drag
     let dragView = null;
 
     let DEBUG = false;
 
-    // Стул теперь decal (НЕ физический body)
+    // Декор-стул (остаётся на месте броска, НЕ физика)
     let chairDecal = null; // {x,y,scale,w,h}
 
-    // SUPER (до респавна)
+    // SUPER
     let superActive = false;
-    let superCharge = 1.0;     // визуальный коэффициент "качания"
-    let superPulseT = 0;
+    let superPulseT = 0;     // фаза качания
+    let superBannerFrames = 0; // сколько кадров показывать "Раскачаемся!!!"
+    let superDim = 0;        // затемнение (0..1)
+    let superAuraPulse = 0;  // пульсация
+
+    // bird swing
+    let birdSwingBaseAngle = 0;
 
     // Камера-шейк
     let shakeTime = 0;
     let shakeMag = 0;
 
-    // Дебрис-осколки (мелкие детали)
+    // Debris
     const debris = []; // {body, ttl, stillFrames}
 
     const structure = { pillars: [], beams: [], managers: [], activated: false };
@@ -161,40 +169,45 @@
     // Дольше живёт птица
     const AUTO_RESPAWN_MS = 9000;
 
-    // Параметры урона/разрушения
+    // Урон/разрушение
     const DMG = {
-      // базовый масштаб урона (чем больше — тем быстрее ломает)
       energyScale: 0.070,
-      // минимальная энергия, чтобы наносить урон
       minEnergy: 5.0,
 
-      // HP объектов (меньше = ломается быстрее)
       hpBeam: 10,
       hpPillar: 12,
       hpManager: 7,
 
-      // шейк камеры от сильных ударов
       shakeEnergyThreshold: 18,
       shakeMax: 18,
 
-      // супер-множитель урона
       superMultiplier: 2.5,
+
+      // ✅ SUPER “качание приносит урон” (аура вокруг птицы)
+      superAuraRadius: 190,
+      superAuraEnergyPerTick: 7.5, // урон "по кругу" (в энергии) каждую пачку тиков
+      superAuraTickEvery: 6         // раз в N кадров
     };
 
-    // поведение осколков
+    // Debris life
     const DEBRIS = {
-      ttlMs: 5200,           // через сколько удалять в любом случае
+      ttlMs: 5200,
       minSpeedToCountStill: 0.18,
-      stillFramesToVanish: 45, // если лежит неподвижно ~0.75с — исчезает
+      stillFramesToVanish: 45,
       airFriction: 0.020,
     };
 
     const SPR = {
       pillarH: 310,
       beamW: 420,
+
       birdRadius: 56,
       birdWIdle: 165,
       birdWFly: 135,
+
+      // ✅ SUPER-скин (стул) — делаем крупнее, чтобы было видно
+      birdWSuper: 175,
+
       managerW: 86,
       chairW: 120
     };
@@ -225,7 +238,6 @@
     function lerp(a,b,t){ return a + (b-a)*t; }
     function clamp(v,min,max){ return Math.max(min, Math.min(max,v)); }
 
-    // круг натяжения и сила
     const SLING = {
       pullMax: 380,
       launchK: 0.145
@@ -240,9 +252,10 @@
       loadImage(ASSETS.manager),
       loadImage(ASSETS.humanIdle),
       loadImage(ASSETS.humanFly),
-      loadImage(ASSETS.chair)
-    ]).then(([imgBg, imgBeam, imgPillar, imgManager, imgIdle, imgFly, imgChair])=>{
-      start({imgBg, imgBeam, imgPillar, imgManager, imgIdle, imgFly, imgChair});
+      loadImage(ASSETS.chair),
+      loadImage(ASSETS.superSkin)
+    ]).then(([imgBg, imgBeam, imgPillar, imgManager, imgIdle, imgFly, imgChair, imgSuper])=>{
+      start({imgBg, imgBeam, imgPillar, imgManager, imgIdle, imgFly, imgChair, imgSuper});
     }).catch((e)=>{
       console.error(e);
       $("status").textContent = "Ошибка PNG";
@@ -307,9 +320,10 @@
       bindPointerControls(IMGS);
       bindPhysics(IMGS);
 
-      // decals/effects draw (стул/индикаторы)
+      // overlay render
       Events.on(render, "afterRender", ()=>{
         if (chairDecal) drawChairDecal(IMGS);
+        drawSuperOverlay(IMGS);
       });
 
       Render.run(render);
@@ -324,18 +338,23 @@
 
       $("superBtn").addEventListener("click", ()=>{
         if (!bird) return;
-        // SUPER активируется на текущую попытку до респавна
+
         if (!superActive){
           superActive = true;
           superPulseT = 0;
+          superBannerFrames = 120; // ~2 сек
           toast("SUPER ON ⚡", 900);
-          updateHUD();
+
+          // лёгкое затемнение сразу
+          superDim = Math.max(superDim, 0.18);
+
+          // если мы ещё не выстрелили — покажем супер-скин при полёте
+          // (сам скин включится на launch)
         } else {
-          // можно выключать тоже
           superActive = false;
           toast("SUPER OFF", 700);
-          updateHUD();
         }
+        updateHUD();
       });
 
       window.addEventListener("resize", ()=>onResize(IMGS));
@@ -365,7 +384,6 @@
       structure.managers = [];
       structure.activated = false;
 
-      // clean debris
       debris.length = 0;
 
       bird = null;
@@ -380,8 +398,10 @@
       chairDecal = null;
 
       superActive = false;
-      superCharge = 1.0;
       superPulseT = 0;
+      superBannerFrames = 0;
+      superDim = 0;
+      superAuraPulse = 0;
 
       shakeTime = 0;
       shakeMag = 0;
@@ -548,13 +568,26 @@
       });
 
       bird.__start = start;
-      bird.__flyTexture = ASSETS.humanFly;
+
       bird.__idleTexture = ASSETS.humanIdle;
-      bird.__flyScale = flyScale;
       bird.__idleScale = idleScale;
+
+      bird.__flyTexture = ASSETS.humanFly;
+      bird.__flyScale = flyScale;
+
+      // SUPER skin (chair) scale
+      bird.__superTexture = ASSETS.superSkin;
+      bird.__superScale = (SPR.birdWSuper / IMGS.imgSuper.width);
 
       birdLaunched = false;
       World.add(world, bird);
+    }
+
+    function setBirdIdle(){
+      if (!bird || DEBUG) return;
+      bird.render.sprite.texture = bird.__idleTexture;
+      bird.render.sprite.xScale = bird.__idleScale;
+      bird.render.sprite.yScale = bird.__idleScale;
     }
 
     function setBirdFly(){
@@ -563,11 +596,12 @@
       bird.render.sprite.xScale = bird.__flyScale;
       bird.render.sprite.yScale = bird.__flyScale;
     }
-    function setBirdIdle(){
+
+    function setBirdSuper(){
       if (!bird || DEBUG) return;
-      bird.render.sprite.texture = bird.__idleTexture;
-      bird.render.sprite.xScale = bird.__idleScale;
-      bird.render.sprite.yScale = bird.__idleScale;
+      bird.render.sprite.texture = bird.__superTexture;
+      bird.render.sprite.xScale = bird.__superScale;
+      bird.render.sprite.yScale = bird.__superScale;
     }
 
     function setupSlingshot(){
@@ -594,7 +628,7 @@
       slingshot = null;
     }
 
-    // Стул = decal (НЕ body)
+    // Декор-стул на старте броска (НЕ физика)
     function spawnChairDecal(IMGS, atPos){
       const chairScale = SPR.chairW / IMGS.imgChair.width;
       chairDecal = {
@@ -603,13 +637,10 @@
         scale: chairScale,
         w: IMGS.imgChair.width * chairScale,
         h: IMGS.imgChair.height * chairScale,
-        rot: 0
       };
     }
 
-    function clearChairDecal(){
-      chairDecal = null;
-    }
+    function clearChairDecal(){ chairDecal = null; }
 
     function scheduleBirdRespawn(IMGS, delayMs){
       if (birdRespawnTimer) return;
@@ -629,8 +660,10 @@
 
         // SUPER сбрасываем при респавне
         superActive = false;
-        superCharge = 1.0;
         superPulseT = 0;
+        superBannerFrames = 0;
+        superDim = 0;
+        superAuraPulse = 0;
 
         spawnBird(IMGS);
         setupSlingshot();
@@ -646,7 +679,7 @@
       }, delayMs);
     }
 
-    // ======== ДЕБРИС / РАЗРУШЕНИЕ В МЕЛКИЕ ДЕТАЛИ ========
+    // ======== DEBRIS / SHATTER ========
 
     function addDebrisBody(body){
       body.__debris = true;
@@ -665,7 +698,6 @@
       const w = body.bounds.max.x - body.bounds.min.x;
       const h = body.bounds.max.y - body.bounds.min.y;
 
-      // мелкие куски (ограничим, чтобы не убить браузер)
       const px = clamp(piecesX|0, 2, 8);
       const py = clamp(piecesY|0, 2, 8);
 
@@ -675,10 +707,8 @@
       const right = Vector.rotate({x:1,y:0}, angle);
       const down  = Vector.rotate({x:0,y:1}, angle);
 
-      // удаляем целый объект
       World.remove(world, body);
 
-      // выкидываем из массивов структуры
       const arr = (body.__type === "beam") ? structure.beams
                : (body.__type === "pillar") ? structure.pillars
                : (body.__type === "manager") ? structure.managers
@@ -688,33 +718,30 @@
         if (idx >= 0) arr.splice(idx, 1);
       }
 
-      // спавним куски
       for (let iy=0; iy<py; iy++){
         for (let ix=0; ix<px; ix++){
           const localX = (ix + 0.5) * cw - w/2;
           const localY = (iy + 0.5) * ch - h/2;
 
-          const wp = Vector.add(
-            pos,
-            Vector.add(
-              Vector.mult(right, localX),
-              Vector.mult(down, localY)
-            )
+          const wp = Vector.add(pos, Vector.add(Vector.mult(right, localX), Vector.mult(down, localY)));
+
+          const piece = Bodies.rectangle(
+            wp.x, wp.y,
+            Math.max(10, cw*0.92),
+            Math.max(10, ch*0.92),
+            {
+              isStatic: false,
+              friction: 0.95,
+              restitution: 0.05,
+              density: 0.0022,
+              chamfer: { radius: 2 },
+              render: DEBUG
+                ? { fillStyle:"rgba(255,255,255,0.12)", strokeStyle:"rgba(255,255,255,0.5)", lineWidth:1 }
+                : { sprite:{ texture: tex, xScale: scaleX, yScale: scaleY } }
+            }
           );
 
-          const piece = Bodies.rectangle(wp.x, wp.y, Math.max(10, cw*0.92), Math.max(10, ch*0.92), {
-            isStatic: false,
-            friction: 0.95,
-            restitution: 0.05,
-            density: 0.0022,
-            chamfer: { radius: 2 },
-            render: DEBUG
-              ? { fillStyle:"rgba(255,255,255,0.12)", strokeStyle:"rgba(255,255,255,0.5)", lineWidth:1 }
-              : { sprite:{ texture: tex, xScale: scaleX, yScale: scaleY } }
-          });
-
           Body.setAngle(piece, angle);
-          // наследуем движение + небольшая "взрывная" рандомизация
           const vx = body.velocity.x + (Math.random()-0.5)*2.2;
           const vy = body.velocity.y + (Math.random()-0.5)*2.2;
           Body.setVelocity(piece, {x:vx, y:vy});
@@ -729,13 +756,12 @@
       updateHUD();
     }
 
-    // ======== ИГРОВАЯ ЛОГИКА / ПОБЕДА ========
+    // ======== GAME / WIN ========
 
-    function killManager(m){
+    function killManager(m, IMGS){
       if (!m || !m.__alive) return;
       m.__alive = false;
 
-      // разнести менеджера на куски
       const tex = ASSETS.manager;
       const s = m.__mScale || 1;
       shatterRect(m, tex, s, s, 4, 4);
@@ -757,7 +783,7 @@
       }
     }
 
-    // ======== КАМЕРА ========
+    // ======== CAMERA ========
 
     function setupCameraInitial(){
       const baseY = window.innerHeight - LEVEL.floorHeight;
@@ -767,16 +793,21 @@
       applyCamera(true);
     }
 
+    function triggerShake(energy){
+      const over = energy - DMG.shakeEnergyThreshold;
+      const strength = clamp(over * 1.6, 6, DMG.shakeMax);
+      shakeMag = Math.max(shakeMag, strength);
+      shakeTime = Math.max(shakeTime, 18);
+    }
+
     function applyCamera(force=false){
       camera.cx = force ? camera.tx : lerp(camera.cx, camera.tx, camera.smoothing);
       camera.cy = force ? camera.ty : lerp(camera.cy, camera.ty, camera.smoothing);
       camera.zoom = force ? camera.tzoom : lerp(camera.zoom, camera.tzoom, camera.smoothing);
 
-      // camera shake
       let sx = 0, sy = 0;
       if (shakeTime > 0){
-        const t = shakeTime;
-        const amp = shakeMag * (t / 18);
+        const amp = shakeMag * (shakeTime / 18);
         sx = (Math.random()*2 - 1) * amp;
         sy = (Math.random()*2 - 1) * amp;
       }
@@ -814,7 +845,7 @@
       Render.lookAt(render, { min: render.bounds.min, max: render.bounds.max });
     }
 
-    // ======== УПРАВЛЕНИЕ ========
+    // ======== INPUT ========
 
     function pointerToWorld(e){
       const rect = render.canvas.getBoundingClientRect();
@@ -848,9 +879,7 @@
             max: { x: render.bounds.max.x, y: render.bounds.max.y }
           };
 
-          // во время натяжения птица статична
           Body.setStatic(bird, true);
-
           $("status").textContent = "Тяни…";
         }
       });
@@ -881,16 +910,17 @@
 
         draggingBird = false;
         dragView = null;
-
         if (!canLaunch) return;
 
         activateStructure();
-        setBirdFly();
 
-        // стул после броска: decal
+        // ✅ если SUPER включен — скин в полете: "человечек на стуле"
+        if (superActive) setBirdSuper();
+        else setBirdFly();
+
+        // стул-наклейка остается на месте выстрела (НЕ мешает физике)
         spawnChairDecal(IMGS, bird.__start);
 
-        // сначала убираем резинку
         detachSlingshot();
 
         Body.setStatic(bird, false);
@@ -907,6 +937,8 @@
           Body.setAngularVelocity(bird, 0);
           Body.setVelocity(bird, vel);
           bird.frictionAir = 0.005;
+
+          birdSwingBaseAngle = 0; // base for super swing
         }
 
         birdLaunched = true;
@@ -927,7 +959,7 @@
       });
     }
 
-    // ======== УРОН / КОЛЛИЗИИ ========
+    // ======== DAMAGE / COLLISIONS ========
 
     function damageFromImpact(speedA, speedB, massRef){
       const rel = Math.abs(speedA - speedB);
@@ -942,42 +974,28 @@
 
       const mult = superActive ? DMG.superMultiplier : 1.0;
       const dmg = energy * DMG.energyScale * mult;
-
       body.__hp -= dmg;
 
       if (body.__hp <= 0){
         body.__broken = true;
 
-        // сильный удар = шейк
         if (energy >= DMG.shakeEnergyThreshold) triggerShake(energy);
 
-        // швыряем на мелкие детали:
         if (body.__type === "beam"){
-          // beam texture scale
           const beamScale = body.__beamScale || (SPR.beamW / (IMGS.imgBeam.width || 1));
           shatterRect(body, ASSETS.beam, beamScale, beamScale, 6, 2);
-          toast("Дерево в щепки 💥", 650);
           return;
         }
         if (body.__type === "pillar"){
           const pillarScale = SPR.pillarH / IMGS.imgPillar.height;
           shatterRect(body, ASSETS.pillar, pillarScale, pillarScale, 4, 6);
-          toast("Колонна в осколки 🪵", 650);
           return;
         }
         if (body.__type === "manager"){
-          // manager already breaks via killManager normally, но если урон выбил hp:
-          killManager(body);
+          killManager(body, IMGS);
           return;
         }
       }
-    }
-
-    function triggerShake(energy){
-      const over = energy - DMG.shakeEnergyThreshold;
-      const strength = clamp(over * 1.6, 6, DMG.shakeMax);
-      shakeMag = Math.max(shakeMag, strength);
-      shakeTime = Math.max(shakeTime, 18);
     }
 
     function bindPhysics(IMGS){
@@ -989,13 +1007,11 @@
 
           const va = Math.hypot(a.velocity.x, a.velocity.y);
           const vb = Math.hypot(b.velocity.x, b.velocity.y);
-
           const energy = damageFromImpact(va, vb, bird ? bird.mass : 1);
 
-          // Шейк от реально сильных ударов вообще (не только ломания)
           if (energy >= DMG.shakeEnergyThreshold) triggerShake(energy);
 
-          // Урон от птицы + усиленный пуш
+          // bird hits
           if (bird && (a === bird || b === bird)){
             const other = (a === bird) ? b : a;
 
@@ -1012,7 +1028,7 @@
             applyDamageTo(other, energy, IMGS);
           }
 
-          // Урон между элементами конструкции (цепная реакция разрушения)
+          // chain damage
           if (energy >= DMG.minEnergy){
             applyDamageTo(a, energy * 0.70, IMGS);
             applyDamageTo(b, energy * 0.70, IMGS);
@@ -1023,22 +1039,13 @@
       Events.on(engine, "beforeUpdate", ()=>{
         const baseY = window.innerHeight - LEVEL.floorHeight;
 
-        // супер-качание стула
-        if (superActive){
-          superPulseT += 1;
-          // мягкое "качание" видно даже когда птица уже улетела — это просто эффект
-          superCharge = 1.0 + Math.sin(superPulseT * 0.18) * 0.12;
-        } else {
-          superCharge = lerp(superCharge, 1.0, 0.12);
-        }
-
         // decay shake
         if (shakeTime > 0){
           shakeTime -= 1;
           shakeMag = lerp(shakeMag, 0, 0.22);
         }
 
-        // очистка дебриса: исчезает при “макс разрухе”
+        // debris cleanup
         for (let i = debris.length - 1; i >= 0; i--){
           const d = debris[i];
           const body = d.body;
@@ -1046,7 +1053,6 @@
             debris.splice(i,1);
             continue;
           }
-
           const sp = Math.hypot(body.velocity.x, body.velocity.y);
           if (sp < DEBRIS.minSpeedToCountStill) d.stillFrames += 1;
           else d.stillFrames = 0;
@@ -1060,7 +1066,59 @@
           }
         }
 
-        // пока тянем — камера заморожена
+        // SUPER overlay fade/pulse
+        if (superActive){
+          superDim = lerp(superDim, 0.18, 0.08);
+          superAuraPulse = lerp(superAuraPulse, 1.0, 0.10);
+        } else {
+          superDim = lerp(superDim, 0.0, 0.08);
+          superAuraPulse = lerp(superAuraPulse, 0.0, 0.12);
+        }
+        if (superBannerFrames > 0) superBannerFrames -= 1;
+
+        // ✅ SUPER: качаем именно птицу в полете + наносим "аурный" урон
+        if (superActive && bird && birdLaunched){
+          superPulseT += 1;
+
+          // качание тела (вращение)
+          const swing = Math.sin(superPulseT * 0.22) * 0.45; // амплитуда
+          const targetAngle = birdSwingBaseAngle + swing;
+
+          // аккуратно: сброс угловой скорости и ставим угол
+          Body.setAngularVelocity(bird, 0);
+          Body.setAngle(bird, targetAngle);
+
+          // "качание приносит урон": раз в N кадров бьём всё в радиусе
+          if ((superPulseT % DMG.superAuraTickEvery) === 0){
+            const bodies = Composite.allBodies(world);
+            const r = DMG.superAuraRadius;
+            const r2 = r*r;
+
+            for (const obj of bodies){
+              if (!obj || obj === bird) continue;
+              if (obj.isStatic) continue;
+              if (obj.__debris) continue;
+
+              const dx = obj.position.x - bird.position.x;
+              const dy = obj.position.y - bird.position.y;
+              const dist2 = dx*dx + dy*dy;
+              if (dist2 > r2) continue;
+
+              // энергия зависит от близости
+              const t = 1 - (Math.sqrt(dist2) / r);
+              const bonusEnergy = DMG.superAuraEnergyPerTick * (0.35 + 0.65*t);
+
+              // наносим урон (ломаем всё быстрее)
+              applyDamageTo(obj, bonusEnergy, IMGS);
+
+              // небольшой "подпих" от качания
+              const dir = Vector.normalise({x:dx, y:dy});
+              Body.applyForce(obj, obj.position, { x: dir.x * 0.010 * t, y: dir.y * 0.010 * t });
+            }
+          }
+        }
+
+        // while dragging — freeze camera
         if (draggingBird && !birdLaunched){
           camera.tx = camera.cx;
           camera.ty = camera.cy;
@@ -1105,7 +1163,7 @@
       });
     }
 
-    // ======== ДЕКОР-СТУЛ РЕНДЕР ========
+    // ======== DECAL & OVERLAY DRAW ========
 
     function worldToScreen(x, y){
       const b = render.bounds;
@@ -1128,28 +1186,67 @@
       const vw = (b.max.x - b.min.x);
       const vh = (b.max.y - b.min.y);
 
-      // "качание" стула при SUPER
-      const swing = superActive ? Math.sin(superPulseT * 0.22) * 0.18 : 0;
-      const scalePulse = superCharge;
-
-      const sw = (chairDecal.w / vw * render.canvas.width) * scalePulse;
-      const sh = (chairDecal.h / vh * render.canvas.height) * scalePulse;
+      const sw = chairDecal.w / vw * render.canvas.width;
+      const sh = chairDecal.h / vh * render.canvas.height;
 
       ctx.save();
-      ctx.translate(p.x, p.y);
-      ctx.rotate(swing);
-      ctx.drawImage(img, -sw/2, -sh/2, sw, sh);
+      ctx.globalAlpha = 1.0;
+      ctx.drawImage(img, p.x - sw/2, p.y - sh/2, sw, sh);
+      ctx.restore();
+    }
 
-      // glow при SUPER
-      if (superActive){
-        ctx.globalAlpha = 0.25;
-        ctx.beginPath();
-        ctx.arc(0, 0, Math.max(sw, sh)*0.35, 0, Math.PI*2);
-        ctx.fillStyle = "rgba(255,210,70,0.35)";
-        ctx.fill();
+    function drawSuperOverlay(){
+      const ctx = render.context;
+      const W = render.canvas.width;
+      const H = render.canvas.height;
+
+      // затемнение экрана
+      if (superDim > 0.004){
+        ctx.save();
+        ctx.globalAlpha = clamp(superDim, 0, 0.35);
+        ctx.fillStyle = "rgba(0,0,0,1)";
+        ctx.fillRect(0,0,W,H);
+
+        // легкий "золотой" glow по центру
+        const pulse = 0.12 + Math.sin((superPulseT||0)*0.10)*0.05;
+        ctx.globalAlpha = clamp(superAuraPulse * pulse, 0, 0.22);
+        const grd = ctx.createRadialGradient(W*0.5, H*0.45, 40, W*0.5, H*0.45, Math.min(W,H)*0.55);
+        grd.addColorStop(0, "rgba(255,210,70,0.55)");
+        grd.addColorStop(1, "rgba(255,210,70,0.0)");
+        ctx.fillStyle = grd;
+        ctx.fillRect(0,0,W,H);
+        ctx.restore();
       }
 
-      ctx.restore();
+      // большая надпись
+      if (superBannerFrames > 0){
+        const t = superBannerFrames / 120; // 1..0
+        const alpha = clamp(0.15 + t, 0, 1);
+        const scale = 1.0 + (1 - t)*0.08;
+
+        ctx.save();
+        ctx.translate(W*0.5, H*0.22);
+        ctx.scale(scale, scale);
+
+        ctx.globalAlpha = alpha;
+        ctx.font = "900 64px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        // stroke
+        ctx.lineWidth = 10;
+        ctx.strokeStyle = "rgba(0,0,0,0.55)";
+        ctx.strokeText("Раскачаемся!!!", 0, 0);
+
+        // glow
+        ctx.shadowColor = "rgba(255,210,70,0.95)";
+        ctx.shadowBlur = 22;
+
+        ctx.fillStyle = "rgba(255,235,160,0.98)";
+        ctx.fillText("Раскачаемся!!!", 0, 0);
+
+        ctx.restore();
+      }
     }
 
   })();
