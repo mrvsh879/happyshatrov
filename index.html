@@ -174,6 +174,12 @@
     function lerp(a,b,t){ return a + (b-a)*t; }
     function clamp(v,min,max){ return Math.max(min, Math.min(max,v)); }
 
+    // ====== НАСТРОЙКИ НАТЯЖЕНИЯ / СИЛЫ (УВЕЛИЧЕНО) ======
+    const SLING = {
+      pullMax: 320,      // было 220 — теперь круг натяжения больше
+      launchK: 0.095     // было 0.070 — теперь бросок сильнее
+    };
+
     $("status").textContent = "Загрузка ассетов…";
 
     Promise.all([
@@ -242,8 +248,6 @@
       mouse = Mouse.create(canvas);
       mouse.pixelRatio = render.options.pixelRatio;
 
-      // MouseConstraint используем только как источник событий/координат.
-      // Делам его почти "безсиловым", чтобы он не мешал пружине/выстрелу.
       mouseConstraint = MouseConstraint.create(engine, {
         mouse,
         constraint: { stiffness: 0.00001, damping: 0.9, render: { visible:false } }
@@ -658,42 +662,27 @@
       Render.lookAt(render, { min: render.bounds.min, max: render.bounds.max });
     }
 
-    // ======= ВАЖНОЕ ИСПРАВЛЕНИЕ "РОГАТКИ" =======
-    // Вместо надежды на constraint (который мы убиваем обнулением velocity во время drag),
-    // мы на mouseup вычисляем натяжение и задаем скорость вручную.
+    // запуск по натяжению
     function launchBirdFromTension(){
       if (!bird || !slingAnchor) return;
 
-      const pull = Vector.sub(slingAnchor, bird.position); // куда тянули (anchor - pos)
+      const pull = Vector.sub(slingAnchor, bird.position);
       const dist = Vector.magnitude(pull);
+      const d = Math.min(dist, SLING.pullMax);
 
-      // max натяжение как в drag
-      const pullMax = 220;
-      const d = Math.min(dist, pullMax);
+      if (d < 6) return;
 
-      if (d < 6) return; // почти не тянул — не стрелять
-
-      // Нормализуем направление
       const dir = Vector.normalise(pull);
+      const vel = Vector.mult(dir, d * SLING.launchK);
 
-      // Коэффициент силы: подстроен, чтобы реально "стреляло" по домикам
-      // Если хочешь сильнее/слабее — меняй LAUNCH_K (0.055..0.085 обычно ок)
-      const LAUNCH_K = 0.070;
-
-      const vel = Vector.mult(dir, d * LAUNCH_K);
-
-      // Прямо задаём скорость (и чуть стабилизируем вращение)
       Body.setVelocity(bird, vel);
       Body.setAngularVelocity(bird, 0);
-
-      // Чтобы не было "прилипания" к якорю из-за микроколлизий
       bird.frictionAir = 0.010;
     }
 
     function bindGameplay(IMGS){
       Events.on(mouseConstraint, "mousedown", ()=>{
         if (!bird || birdLaunched || !canLaunch) return;
-
         const found = Query.point([bird], mouse.position);
         if (found && found.length){
           draggingBird = true;
@@ -710,12 +699,10 @@
         let dx = mp.x - start.x;
         let dy = mp.y - start.y;
 
-        // запрещаем тянуть вправо
         if (dx > 0) dx = 0;
 
-        const pullMax = 220;
         const dist = Math.hypot(dx, dy) || 1;
-        const k = Math.min(1, pullMax / dist);
+        const k = Math.min(1, SLING.pullMax / dist);
 
         const px = start.x + dx * k;
         const py = start.y + dy * k;
@@ -724,7 +711,7 @@
         Body.setVelocity(bird, { x: 0, y: 0 });
         Body.setAngularVelocity(bird, 0);
 
-        const tension = Math.min(1, dist / pullMax);
+        const tension = Math.min(1, dist / SLING.pullMax);
         camera.tzoom = 0.92 - tension * 0.10;
       });
 
@@ -736,13 +723,9 @@
         activateStructure();
         setBirdFly();
 
-        // стул появляется после броска
         spawnChairAfterLaunch(IMGS, bird.__start);
 
-        // === фикс запуска: задаём скорость по натяжению ===
         launchBirdFromTension();
-
-        // отцепляем "резинку" визуально/логически
         detachSlingshot();
 
         birdLaunched = true;
@@ -758,7 +741,6 @@
 
       Events.on(engine, "collisionStart", (event)=>{
         if (!structure.activated) return;
-
         for (const pair of event.pairs){
           const a = pair.bodyA, b = pair.bodyB;
 
