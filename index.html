@@ -8,7 +8,7 @@
   <style>
     html, body {
       margin:0; padding:0; width:100%; height:100%;
-      overflow:hidden; background:#06121f;
+      overflow:hidden; background:#050a12;
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
     }
     #wrap { position:fixed; inset:0; }
@@ -75,27 +75,27 @@
     .super-fly.show { display:block; }
 
     .super-fly button{
-      font-size: 30px;
-      padding: 34px 60px;
-      border-radius: 26px;
+      font-size: 32px;
+      padding: 38px 68px;
+      border-radius: 28px;
 
-      border: 3px solid rgba(255,210,70,.70);
+      border: 3px solid rgba(255,210,70,.75);
       background: rgba(255,210,70,.18);
 
       box-shadow:
-        0 20px 65px rgba(0,0,0,.46),
-        0 0 0 4px rgba(255,210,70,.14) inset;
+        0 20px 70px rgba(0,0,0,.48),
+        0 0 0 5px rgba(255,210,70,.14) inset;
 
-      letter-spacing: 1px;
+      letter-spacing: 1.1px;
     }
     .super-fly button:hover{
       background: rgba(255,210,70,.26);
     }
     .super-fly button.super-on{
-      background: rgba(255,210,70,.32);
+      background: rgba(255,210,70,.33);
       box-shadow:
-        0 20px 72px rgba(0,0,0,.52),
-        0 0 0 4px rgba(255,210,70,.18) inset;
+        0 22px 78px rgba(0,0,0,.55),
+        0 0 0 5px rgba(255,210,70,.18) inset;
     }
     .super-fly .hint{
       text-align:center;
@@ -174,7 +174,7 @@
       });
     }
 
-    // ✅ ассеты (SUPER-скин ты дал конкретный путь)
+    // ✅ ассеты
     const ASSETS = {
       bg: "assets/bg_office.png",
       beam: "assets/office/beam.png",
@@ -184,7 +184,7 @@
       humanFly: "assets/player/human_fly.png",
       chair: "assets/player/chair.png",
 
-      // ✅ В SUPER будет "человечек на стуле" — ты сказал что это именно этот файл
+      // ✅ SUPER-скин = "человечек на стуле" (как ты сказал)
       superSkin: "assets/player/human_idle.png"
     };
 
@@ -230,32 +230,40 @@
     const structure = { pillars: [], beams: [], managers: [], activated: false };
     const stats = { score:0, broken:0, hits:0, wins:0 };
 
-    // ✅ время жизни птицы (успевает нанести урон)
+    // ✅ время жизни птицы
     const AUTO_RESPAWN_MS = 12000;
 
-    // ✅ СДЕЛАЛ ЛОМАНИЕ АГРЕССИВНЫМ (чтобы реально крошилось)
+    // ✅ Темнение фона (всегда)
+    const VISUAL = {
+      ambientDark: 0.18,      // постоянная темная подложка
+      vignette: 0.22,         // виньетка по краям
+      vignettePower: 0.95
+    };
+
+    // ✅ Плавность полета
+    const FLIGHT = {
+      airFrictionFlying: 0.0032,   // меньше сопротивление => плавнее
+      maxSpeed: 52,                // clamp скорости (убирает дерготню)
+      maxAngular: 0.18,            // clamp вращения
+      settleFrictionAir: 0.012     // после сильного замедления
+    };
+
+    // ✅ СДЕЛАЛ ЛОМАНИЕ АГРЕССИВНЫМ
     const DMG = {
-      // базовая шкала урона
       energyScale: 0.95,
-      // минимальная энергия (очень низкий порог, чтобы ломалось почти всегда)
       minEnergy: 0.35,
 
-      // HP сильно ниже
       hpBeam: 0.95,
       hpPillar: 1.35,
       hpManager: 0.75,
 
-      // сильный удар — сразу в хлам
       instaShatterEnergy: 6.8,
 
-      // шейк
       shakeEnergyThreshold: 8.0,
       shakeMax: 22,
 
-      // SUPER
       superMultiplier: 3.2,
 
-      // SUPER aura
       superAuraRadius: 240,
       superAuraEnergyPerTick: 16.0,
       superAuraTickEvery: 5
@@ -297,7 +305,7 @@
       tx: 0, ty: 0,
       zoom: 1.0,
       tzoom: 1.0,
-      smoothing: 0.12
+      smoothing: 0.14  // чуть плавнее камера
     };
 
     function lerp(a,b,t){ return a + (b-a)*t; }
@@ -324,10 +332,9 @@
 
       if (superActive){
         superPulseT = 0;
-        superBannerFrames = 150;
-        superDim = Math.max(superDim, 0.20);
+        superBannerFrames = 180;     // дольше и заметнее
+        superDim = Math.max(superDim, 0.26);
 
-        // база для качания
         birdSwingBaseAngle = (bird && typeof bird.angle === "number") ? bird.angle : 0;
 
         toast("SUPER ON ⚡", 900);
@@ -381,7 +388,14 @@
 
       engine = Engine.create();
       world = engine.world;
-      world.gravity.y = 1.05;
+
+      // ✅ чуть "мягче" гравитация => полет приятнее
+      world.gravity.y = 0.98;
+
+      // ✅ чуть повышаем итерации (стабильнее физика, меньше дерготни)
+      engine.positionIterations = 8;
+      engine.velocityIterations = 7;
+      engine.constraintIterations = 3;
 
       render = Render.create({
         element: wrap,
@@ -417,7 +431,12 @@
       bindPhysics(IMGS);
 
       Events.on(render, "afterRender", ()=>{
+        // ✅ темное “киношное” тонирование (всегда)
+        drawAmbientDarkness();
+
         if (chairDecal) drawChairDecal(IMGS);
+
+        // SUPER overlays + огромный текст
         drawSuperOverlay();
       });
 
@@ -607,7 +626,7 @@
       const superScale = SPR.birdWSuper / IMGS.imgSuper.width;
 
       bird = Bodies.circle(start.x, start.y, SPR.birdRadius, {
-        restitution:0.18,
+        restitution:0.20,
         friction:0.95,
         frictionAir:0.012,
         density:0.0048,
@@ -623,7 +642,6 @@
       bird.__flyTexture = ASSETS.humanFly;
       bird.__flyScale = flyScale;
 
-      // ✅ SUPER = человечек на стуле (ты дал путь)
       bird.__superTexture = ASSETS.superSkin;
       bird.__superScale = superScale;
 
@@ -671,7 +689,7 @@
       slingshot = null;
     }
 
-    // ✅ ДЕКОР-СТУЛ (НЕ физика, не мешает полёту)
+    // ✅ ДЕКОР-СТУЛ (не физика)
     function spawnChairDecal(IMGS, atPos){
       const chairScale = SPR.chairW / IMGS.imgChair.width;
       chairDecal = { x: atPos.x, y: atPos.y + 64, w: IMGS.imgChair.width*chairScale, h: IMGS.imgChair.height*chairScale };
@@ -891,8 +909,13 @@
         if (d > 8){
           const dir = Vector.normalise(pull);
           const vel = Vector.mult(dir, d * SLING.launchK);
+
+          // ✅ плавнее запуск: сброс и установка скорости + снижение air friction
+          Body.setVelocity(bird, { x: 0, y: 0 });
+          Body.setAngularVelocity(bird, 0);
           Body.setVelocity(bird, vel);
-          bird.frictionAir = 0.004;
+
+          bird.frictionAir = FLIGHT.airFrictionFlying;
           birdSwingBaseAngle = 0;
         }
 
@@ -912,8 +935,6 @@
     function impactEnergy(bodyA, bodyB){
       const rv = Vector.sub(bodyA.velocity, bodyB.velocity);
       const rel = Vector.magnitude(rv);
-
-      // делаем энергию "более чувствительной" (чтобы ломалось даже при средних ударах)
       const massRef = (bird && (bodyA === bird || bodyB === bird)) ? bird.mass : Math.min(bodyA.mass||1, bodyB.mass||1);
       return 0.5 * massRef * rel * rel;
     }
@@ -965,19 +986,15 @@
 
       for (const pair of pairs){
         const a = pair.bodyA, b = pair.bodyB;
-
-        // энергия удара
         const energy = impactEnergy(a, b) * energyFactor;
 
         if (energy >= DMG.shakeEnergyThreshold) triggerShake(energy);
 
-        // основной урон
         if (bird && (a === bird || b === bird)){
           const other = (a === bird) ? b : a;
           applyDamageTo(other, energy, IMGS);
         }
 
-        // цепной урон
         if (energy >= DMG.minEnergy){
           applyDamageTo(a, energy * 0.90, IMGS);
           applyDamageTo(b, energy * 0.90, IMGS);
@@ -986,12 +1003,10 @@
     }
 
     function bindPhysics(IMGS){
-      // ✅ стартовый удар
       Events.on(engine, "collisionStart", (event)=>{
         processCollisionPairs(event.pairs, IMGS, 1.00);
       });
 
-      // ✅ ключевая штука: накопление урона при “давлении/скольжении”
       Events.on(engine, "collisionActive", (event)=>{
         processCollisionPairs(event.pairs, IMGS, 0.22);
       });
@@ -1014,6 +1029,26 @@
           }
         }
 
+        // ✅ полет плавнее: clamp скорости/вращения, чтобы не дергало
+        if (bird && birdLaunched){
+          const v = bird.velocity;
+          const speed = Math.hypot(v.x, v.y);
+          if (speed > FLIGHT.maxSpeed){
+            const k = FLIGHT.maxSpeed / speed;
+            Body.setVelocity(bird, { x: v.x * k, y: v.y * k });
+          }
+
+          const av = bird.angularVelocity || 0;
+          if (Math.abs(av) > FLIGHT.maxAngular){
+            Body.setAngularVelocity(bird, Math.sign(av) * FLIGHT.maxAngular);
+          }
+
+          // если почти остановился — возвращаем обычный air friction
+          if (speed < 1.1){
+            bird.frictionAir = lerp(bird.frictionAir, FLIGHT.settleFrictionAir, 0.06);
+          }
+        }
+
         // shake decay
         if (shakeTime > 0){
           shakeTime -= 1;
@@ -1022,7 +1057,7 @@
 
         // overlay fade/pulse
         if (superActive){
-          superDim = lerp(superDim, 0.20, 0.08);
+          superDim = lerp(superDim, 0.26, 0.08);
           superAuraPulse = lerp(superAuraPulse, 1.0, 0.10);
         } else {
           superDim = lerp(superDim, 0.0, 0.08);
@@ -1030,19 +1065,17 @@
         }
         if (superBannerFrames > 0) superBannerFrames -= 1;
 
-        // ✅ SUPER: скин + качание + аура-урон
+        // SUPER: скин + качание + аура-урон
         if (superActive && bird && birdLaunched){
           superPulseT += 1;
 
           setBirdSuper();
 
-          // качание
           const swing = Math.sin(superPulseT * 0.24) * 0.55;
           const targetAngle = birdSwingBaseAngle + swing;
           Body.setAngularVelocity(bird, 0);
           Body.setAngle(bird, targetAngle);
 
-          // аура урон
           if ((superPulseT % DMG.superAuraTickEvery) === 0){
             const bodies = Composite.allBodies(world);
             const r = DMG.superAuraRadius;
@@ -1079,8 +1112,9 @@
 
         // camera follow
         if (bird && birdLaunched){
-          camera.tx = bird.position.x + 240;
-          camera.ty = bird.position.y - 120;
+          // чуть больше "look-ahead" вперед
+          camera.tx = bird.position.x + 280;
+          camera.ty = bird.position.y - 140;
           camera.tzoom = 1.10;
         } else {
           camera.tx = 900;
@@ -1125,50 +1159,83 @@
       ctx.restore();
     }
 
+    // ✅ постоянное темнение + виньетка (фон темный и “дорогой”)
+    function drawAmbientDarkness(){
+      const ctx = render.context;
+      const W = render.canvas.width;
+      const H = render.canvas.height;
+
+      ctx.save();
+      ctx.globalAlpha = clamp(VISUAL.ambientDark, 0, 0.45);
+      ctx.fillStyle = "rgba(0,0,0,1)";
+      ctx.fillRect(0,0,W,H);
+      ctx.restore();
+
+      ctx.save();
+      ctx.globalAlpha = clamp(VISUAL.vignette, 0, 0.55);
+      const grd = ctx.createRadialGradient(W*0.5, H*0.52, Math.min(W,H)*0.18, W*0.5, H*0.52, Math.min(W,H)*0.72);
+      grd.addColorStop(0, "rgba(0,0,0,0)");
+      grd.addColorStop(1, "rgba(0,0,0,1)");
+      ctx.fillStyle = grd;
+      ctx.fillRect(0,0,W,H);
+      ctx.restore();
+    }
+
     function drawSuperOverlay(){
       const ctx = render.context;
       const W = render.canvas.width;
       const H = render.canvas.height;
 
+      // SUPER dim доп. (поверх общего темнения)
       if (superDim > 0.004){
         ctx.save();
-        ctx.globalAlpha = clamp(superDim, 0, 0.40);
+        ctx.globalAlpha = clamp(superDim, 0, 0.45);
         ctx.fillStyle = "rgba(0,0,0,1)";
         ctx.fillRect(0,0,W,H);
 
-        const pulse = 0.14 + Math.sin((superPulseT||0)*0.10)*0.06;
-        ctx.globalAlpha = clamp(superAuraPulse * pulse, 0, 0.24);
-        const grd = ctx.createRadialGradient(W*0.5, H*0.45, 40, W*0.5, H*0.45, Math.min(W,H)*0.55);
-        grd.addColorStop(0, "rgba(255,210,70,0.60)");
+        const pulse = 0.16 + Math.sin((superPulseT||0)*0.10)*0.07;
+        ctx.globalAlpha = clamp(superAuraPulse * pulse, 0, 0.28);
+        const grd = ctx.createRadialGradient(W*0.5, H*0.50, 30, W*0.5, H*0.50, Math.min(W,H)*0.62);
+        grd.addColorStop(0, "rgba(255,210,70,0.65)");
         grd.addColorStop(1, "rgba(255,210,70,0.0)");
         ctx.fillStyle = grd;
         ctx.fillRect(0,0,W,H);
         ctx.restore();
       }
 
+      // ✅ ОГРОМНАЯ надпись на весь экран/мир (по сути — на весь viewport игры)
       if (superBannerFrames > 0){
-        const t = superBannerFrames / 150;
-        const alpha = clamp(0.15 + t, 0, 1);
-        const scale = 1.0 + (1 - t)*0.08;
+        const t = superBannerFrames / 180;
+        const alpha = clamp(0.12 + t, 0, 1);
 
         ctx.save();
-        ctx.translate(W*0.5, H*0.22);
-        ctx.scale(scale, scale);
-
         ctx.globalAlpha = alpha;
-        ctx.font = "900 70px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
 
-        ctx.lineWidth = 10;
-        ctx.strokeStyle = "rgba(0,0,0,0.55)";
-        ctx.strokeText("Раскачаемся!!!", 0, 0);
+        // большой “слой-подложка” по центру
+        const big = Math.max(92, Math.min(150, Math.floor(W * 0.11)));
+        ctx.font = `900 ${big}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial`;
 
-        ctx.shadowColor = "rgba(255,210,70,0.95)";
-        ctx.shadowBlur = 22;
+        // stroke жирный
+        ctx.lineWidth = 14;
+        ctx.strokeStyle = "rgba(0,0,0,0.62)";
+        ctx.strokeText("Раскачаемся!!!", W*0.50, H*0.18);
 
-        ctx.fillStyle = "rgba(255,235,160,0.98)";
-        ctx.fillText("Раскачаемся!!!", 0, 0);
+        // glow
+        ctx.shadowColor = "rgba(255,210,70,0.98)";
+        ctx.shadowBlur = 28;
+
+        ctx.fillStyle = "rgba(255,235,170,0.98)";
+        ctx.fillText("Раскачаемся!!!", W*0.50, H*0.18);
+
+        // второй, полупрозрачный “водяной знак” по центру мира (очень большой)
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = alpha * 0.18;
+        const huge = Math.max(140, Math.min(260, Math.floor(W * 0.18)));
+        ctx.font = `900 ${huge}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial`;
+        ctx.fillStyle = "rgba(255,210,70,0.85)";
+        ctx.fillText("Раскачаемся!!!", W*0.50, H*0.52);
 
         ctx.restore();
       }
