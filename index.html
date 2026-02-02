@@ -2,786 +2,829 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Office Birds — MVP</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Office Birds — Level 1</title>
+
   <style>
-    html, body { margin:0; padding:0; height:100%; overflow:hidden; }
-    body{
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      background: #0b1320;
-      /* ✅ фон грузим CSS'ом, не через Matter.Render.background */
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #06121f;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    }
+
+    /* Фон — картинка (как у тебя) */
+    body {
       background-image: url("assets/bg_office.png");
       background-size: cover;
-      background-position: center bottom;
+      background-position: center;
       background-repeat: no-repeat;
     }
-    canvas{ display:block; }
 
-    .hud{
-      position:fixed; left:16px; top:12px; z-index:10;
-      display:flex; gap:10px; align-items:flex-start;
-      pointer-events:none;
+    #wrap {
+      position: fixed;
+      inset: 0;
     }
-    .panel{
-      pointer-events:none;
-      background: rgba(8,14,22,.55);
-      border: 1px solid rgba(255,255,255,.12);
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .hud {
+      position: fixed;
+      left: 16px;
+      top: 16px;
+      z-index: 10;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      pointer-events: none;
+    }
+
+    .panel {
+      pointer-events: none;
+      background: rgba(9, 18, 28, 0.55);
+      border: 1px solid rgba(255,255,255,0.12);
       border-radius: 10px;
       padding: 10px 12px;
-      color: rgba(255,255,255,.92);
-      box-shadow: 0 10px 30px rgba(0,0,0,.35);
+      color: rgba(255,255,255,0.92);
       backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
-      max-width: 360px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+      min-width: 240px;
     }
-    .titleRow{
-      display:flex; align-items:center; gap:10px; margin-bottom:6px;
-      font-weight:700;
-    }
-    .badge{
-      font-size:12px; font-weight:800;
-      padding:4px 8px; border-radius:999px;
-      background: rgba(255,255,255,.10);
-      border: 1px solid rgba(255,255,255,.14);
-    }
-    .btn{
-      pointer-events:auto;
-      cursor:pointer;
-      border: 1px solid rgba(255,255,255,.18);
-      background: rgba(255,255,255,.10);
-      color: rgba(255,255,255,.92);
-      border-radius: 10px;
-      padding: 8px 12px;
-      font-weight:700;
-      user-select:none;
-    }
-    .btn:hover{ background: rgba(255,255,255,.16); }
-    .small{ font-size:12px; line-height:1.35; opacity:.92; }
-    .statsRow{ display:flex; gap:12px; margin-top:6px; flex-wrap:wrap; }
-    .kv{ font-size:12px; opacity:.9; }
-    .kv b{ font-size:13px; opacity:1; }
 
-    .hudRight{
-      position:fixed; right:16px; top:12px; z-index:10;
-      display:flex; gap:10px; align-items:flex-start;
-      pointer-events:none;
+    .panel h1 {
+      font-size: 14px;
+      margin: 0 0 6px 0;
+      font-weight: 700;
+      letter-spacing: 0.2px;
     }
-    .hint{
-      position:fixed;
-      left:50%; bottom:10px; transform:translateX(-50%);
-      z-index:10;
-      background: rgba(0,0,0,.42);
-      color: rgba(255,255,255,.85);
-      border: 1px solid rgba(255,255,255,.12);
+
+    .panel small {
+      display: block;
+      opacity: 0.85;
+      line-height: 1.3;
+      font-size: 12px;
+    }
+
+    .btnbar {
+      pointer-events: auto;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    button {
+      pointer-events: auto;
+      background: rgba(255,255,255,0.10);
+      color: rgba(255,255,255,0.92);
+      border: 1px solid rgba(255,255,255,0.16);
+      padding: 8px 12px;
       border-radius: 10px;
+      cursor: pointer;
+      font-weight: 700;
+      transition: transform .08s ease, background .15s ease;
+      user-select: none;
+    }
+
+    button:hover { background: rgba(255,255,255,0.16); }
+    button:active { transform: translateY(1px); }
+
+    .right {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 10;
+      width: 310px;
+      pointer-events: none;
+    }
+
+    .kv {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 6px 10px;
+      margin-top: 8px;
+      font-size: 12px;
+      opacity: 0.92;
+    }
+
+    .kv div:nth-child(2n) {
+      opacity: 0.95;
+      font-weight: 800;
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 14px;
+      transform: translateX(-50%);
+      z-index: 10;
       padding: 6px 10px;
       font-size: 12px;
-      pointer-events:none;
+      color: rgba(255,255,255,0.92);
+      background: rgba(0,0,0,0.40);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 999px;
       backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity .18s ease;
     }
+    .toast.show { opacity: 1; }
   </style>
 </head>
+
 <body>
   <div class="hud">
     <div class="panel">
-      <div class="titleRow">
-        <span class="badge">LEVEL 1</span>
-        <span>Office Birds</span>
-      </div>
-      <div class="small">
-        Зажми на человечке → потяни назад → отпусти.<br/>
-        Чем сильнее натяжка, тем дальше полёт.
-      </div>
-
-      <div class="statsRow">
-        <div class="kv">Счёт: <b id="score">0</b></div>
-        <div class="kv">Сломано балок: <b id="broken">0</b></div>
-        <div class="kv">Попыток: <b id="shots">0</b></div>
+      <h1><span style="opacity:.9">LEVEL 1</span> &nbsp; Office Birds</h1>
+      <small>Зажми на человечке → потяни назад → отпусти.</small>
+      <small>Чем сильнее натяжка, тем дальше полёт.</small>
+      <div class="kv">
+        <div>Счёт:</div><div id="score">0</div>
+        <div>Сломано балок:</div><div id="broken">0</div>
+        <div>Попаданий:</div><div id="hits">0</div>
       </div>
     </div>
 
-    <button class="btn" id="resetBtn">Reset (всё заново)</button>
+    <div class="btnbar">
+      <button id="resetBtn" title="Пересобрать уровень">Reset (всё заново)</button>
+    </div>
   </div>
 
-  <div class="hudRight">
-    <div class="panel" style="max-width:380px;">
-      <div style="font-weight:800; margin-bottom:6px;">Цель</div>
-      <div class="small">
-        Развали офисный домик (2 этажа).<br/>
-        Внутри сидят менеджеры в наушниках.<br/>
-        После выстрела идёт 2–3 сек разрушения → авто-ресpawn.<br/>
-        Домик не восстанавливается (остаётся поломанным).
-      </div>
-      <div class="small" style="margin-top:6px;">
-        Статус: <b id="status">Готов</b>
+  <div class="right">
+    <div class="panel">
+      <h1>Цель</h1>
+      <small>Развали офисный домик (2 этажа).</small>
+      <small>Внутри сидят менеджеры в наушниках.</small>
+      <small>После выстрела: 2–3 сек разрушения → авто-респавн.</small>
+      <small>Домик не восстанавливается (поломки сохраняются).</small>
+      <div class="kv">
+        <div>Статус:</div><div id="status">Загрузка…</div>
       </div>
     </div>
   </div>
 
-  <div class="hint" id="hint">Если что-то “пропало” — проверь, что PNG лежат как в путях: assets/office/* и assets/player/*</div>
+  <div id="wrap">
+    <canvas id="c"></canvas>
+  </div>
 
+  <div id="toast" class="toast">…</div>
+
+  <!-- Matter.js -->
   <script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
+
   <script>
-    (() => {
-      const {
-        Engine, Render, Runner, World, Bodies, Body, Composite, Composites,
-        Constraint, Mouse, MouseConstraint, Events, Sleeping, Vector
-      } = Matter;
+    (function () {
+      "use strict";
 
-      // =========================
-      // ✅ ПУТИ (под твой репо-дерево)
-      // =========================
-      const ASSETS = {
-        beam:   "assets/office/beam.png",
-        pillar: "assets/office/pillar.png",
-        manager:"assets/office/manager.png",
-        birdIdle:"assets/player/human_idle.png",
-        birdFly:"assets/player/human_fly.png"
-      };
+      // ---------- helpers ----------
+      const $ = (id) => document.getElementById(id);
+      const toastEl = $("toast");
+      function toast(msg, ms = 1400) {
+        toastEl.textContent = msg;
+        toastEl.classList.add("show");
+        setTimeout(() => toastEl.classList.remove("show"), ms);
+      }
 
-      // =========================
-      // UI
-      // =========================
-      const $score = document.getElementById("score");
-      const $broken = document.getElementById("broken");
-      const $shots = document.getElementById("shots");
-      const $status = document.getElementById("status");
-      const resetBtn = document.getElementById("resetBtn");
-
-      let score = 0;
-      let brokenBeams = 0;
-      let shots = 0;
-
-      function setStatus(t){ $status.textContent = t; }
-
-      // =========================
-      // Helpers: load images + fallback
-      // =========================
-      function loadImage(src){
-        return new Promise((resolve) => {
+      function loadImage(src) {
+        return new Promise((resolve, reject) => {
           const img = new Image();
           img.onload = () => resolve(img);
-          img.onerror = () => resolve(null);
-          img.src = src + "?v=" + Date.now(); // cache-bust
+          img.onerror = () => reject(new Error("Не загрузилась картинка: " + src));
+          img.src = src + (src.includes("?") ? "&" : "?") + "v=" + Date.now();
         });
       }
 
-      function spriteOrFallback(body, img, w, h, fallbackColor){
-        if (img) {
-          body.render.sprite = {
-            texture: img.src,
-            xScale: w / (img.naturalWidth || w),
-            yScale: h / (img.naturalHeight || h)
-          };
-          body.render.fillStyle = "transparent";
-        } else {
-          body.render.fillStyle = fallbackColor;
-          body.render.strokeStyle = "rgba(255,255,255,0.25)";
-          body.render.lineWidth = 2;
-        }
-      }
+      // ---------- assets ----------
+      const ASSETS = {
+        bg: "assets/bg_office.png",
+        beam: "assets/office/beam.png",
+        pillar: "assets/office/pillar.png",
+        manager: "assets/office/manager.png",
+        humanIdle: "assets/player/human_idle.png",
+        humanFly: "assets/player/human_fly.png"
+      };
 
-      // =========================
-      // Engine / Render
-      // =========================
-      const engine = Engine.create();
-      engine.world.gravity.y = 1.0; // ✅ вниз
-      engine.world.gravity.x = 0;
+      // ---------- Matter aliases ----------
+      const {
+        Engine, Render, Runner, World, Bodies, Body,
+        Constraint, Mouse, MouseConstraint, Events, Composite
+      } = Matter;
 
-      const W = () => window.innerWidth;
-      const H = () => window.innerHeight;
+      // ---------- game state ----------
+      let engine, world, render, runner;
+      let mouseConstraint;
 
-      const render = Render.create({
-        element: document.body,
-        engine,
-        options: {
-          width: W(),
-          height: H(),
-          wireframes: false,
-          background: "transparent",
-          pixelRatio: Math.min(2, window.devicePixelRatio || 1)
-        }
+      let ground;
+      let bird = null;
+      let birdLaunched = false;
+      let birdRespawnTimer = null;
+
+      const structure = {
+        pillars: [],
+        beams: [],
+        joints: [],
+        managers: [],
+        frozenUntil: 0
+      };
+
+      const stats = {
+        score: 0,
+        broken: 0,
+        hits: 0
+      };
+
+      // break system
+      const JOINT_BREAK_THRESHOLD = 7.0; // чем меньше — тем легче ломается
+      const MANAGER_HIT_SPEED = 4.3;
+
+      // layout tuning
+      const LAYOUT = {
+        // сцена
+        floorHeight: 90,
+        // стартовая позиция человечка
+        birdStartX: 160,
+        birdStartYOffset: 170, // от пола вверх
+        // домик (компактнее)
+        houseCenterX: () => Math.round(window.innerWidth * 0.62),
+        houseBaseY: () => Math.round(window.innerHeight - LAYOUT.floorHeight),
+        houseWidth: 380,
+        houseHeight: 260,
+        // этажи: низ/перекрытие/верх
+        yBottomBeam: () => LAYOUT.houseBaseY() - 40,
+        yMidBeam: () => LAYOUT.houseBaseY() - 140,
+        yTopBeam: () => LAYOUT.houseBaseY() - 240,
+        // менеджеры (внутри)
+        managersCount: 3
+      };
+
+      // sprite scaling target (в пикселях на экране)
+      const SPRITE_TARGET = {
+        pillarH: 250,
+        beamW: 360,
+        birdWIdle: 130, // human_idle (на стуле)
+        birdWFly: 92,   // human_fly
+        managerW: 78
+      };
+
+      // ---------- init ----------
+      $("status").textContent = "Загрузка ассетов…";
+
+      Promise.all([
+        loadImage(ASSETS.beam),
+        loadImage(ASSETS.pillar),
+        loadImage(ASSETS.manager),
+        loadImage(ASSETS.humanIdle),
+        loadImage(ASSETS.humanFly),
+        loadImage(ASSETS.bg).catch(() => null) // фон не блокирует запуск (он в CSS)
+      ]).then(([imgBeam, imgPillar, imgManager, imgIdle, imgFly]) => {
+        const IMGS = { imgBeam, imgPillar, imgManager, imgIdle, imgFly };
+        start(IMGS);
+      }).catch((e) => {
+        console.error(e);
+        $("status").textContent = "Ошибка загрузки PNG";
+        toast("PNG ошибка — проверь пути assets/", 2500);
       });
 
-      Render.run(render);
-      const runner = Runner.create();
-      Runner.run(runner, engine);
+      function start(IMGS) {
+        $("status").textContent = "Запуск…";
 
-      window.addEventListener("resize", () => {
-        render.canvas.width = W() * render.options.pixelRatio;
-        render.canvas.height = H() * render.options.pixelRatio;
-        render.options.width = W();
-        render.options.height = H();
-        Render.lookAt(render, {
-          min: { x: 0, y: 0 },
-          max: { x: W(), y: H() }
-        });
-      });
+        const canvas = $("c");
+        const wrap = $("wrap");
 
-      // =========================
-      // World bounds / floor
-      // =========================
-      function makeFloor(){
-        // четкий пол
-        const floorH = Math.max(40, Math.floor(H()*0.06));
-        const floor = Bodies.rectangle(W()/2, H()-floorH/2, W(), floorH, {
-          isStatic: true,
-          friction: 1,
-          restitution: 0,
-          render: {
-            fillStyle: "rgba(0,0,0,0.20)"
+        engine = Engine.create();
+        world = engine.world;
+        world.gravity.y = 1.0;
+
+        render = Render.create({
+          element: wrap,
+          canvas,
+          engine,
+          options: {
+            width: window.innerWidth,
+            height: window.innerHeight,
+            wireframes: false,
+            background: "transparent",
+            pixelRatio: window.devicePixelRatio || 1
           }
         });
 
-        // стены, чтобы ничего не улетало бесконечно
-        const wallT = 80;
-        const leftWall = Bodies.rectangle(-wallT/2, H()/2, wallT, H()*2, { isStatic:true, render:{visible:false} });
-        const rightWall = Bodies.rectangle(W()+wallT/2, H()/2, wallT, H()*2, { isStatic:true, render:{visible:false} });
-        const topWall = Bodies.rectangle(W()/2, -wallT/2, W()*2, wallT, { isStatic:true, render:{visible:false} });
+        runner = Runner.create();
 
-        World.add(engine.world, [floor, leftWall, rightWall, topWall]);
-        return floor;
-      }
+        // ground
+        ground = Bodies.rectangle(
+          window.innerWidth / 2,
+          window.innerHeight - LAYOUT.floorHeight / 2,
+          window.innerWidth + 200,
+          LAYOUT.floorHeight,
+          {
+            isStatic: true,
+            friction: 0.9,
+            restitution: 0.0,
+            render: { fillStyle: "rgba(0,0,0,0)" }
+          }
+        );
+        World.add(world, ground);
 
-      let floorBody = makeFloor();
-
-      // =========================
-      // Game objects refs
-      // =========================
-      let bird = null;
-      let sling = null;
-      let slingAnchor = null;
-      let mouseConstraint = null;
-
-      let structureBodies = []; // beams + pillars
-      let managers = [];
-      let debris = [];
-      let breakables = new Map(); // body.id -> {hp,maxHp,type}
-      let launched = false;
-      let respawnTimer = null;
-
-      // =========================
-      // Parameters (feel tuning)
-      // =========================
-      const params = {
-        // Позиции
-        birdStart: { x: 140, y: () => H() - 130 },
-        slingAnchor: { x: 165, y: () => H() - 155 },
-
-        // Ограничение натяжки
-        maxPull: 115,
-        power: 0.020, // чем меньше — тем слабее
-        autoRespawnMs: 2700,
-
-        // Домик — ближе к персонажу
-        houseX: () => Math.max(420, Math.min(W()*0.55, 650)),
-        houseYBase: () => H() - 160,
-
-        // Размеры (два этажа)
-        pillarW: 48,
-        pillarH: 240,
-        beamW: 360,
-        beamH: 42,
-        floorBeamW: 320,
-        floorBeamH: 38,
-
-        // Прочность
-        beamHP: 95,
-        pillarHP: 160,
-        breakHitMin: 7.0 // порог силы удара
-      };
-
-      // =========================
-      // Build: structure 2 floors + managers
-      // =========================
-      function addSleeping(body){
-        // чтобы не “расползалось” до удара
-        Sleeping.set(body, true);
-        body.sleepThreshold = 60;
-      }
-
-      function makeBeam(x,y,w,h, imgBeam){
-        const b = Bodies.rectangle(x,y,w,h,{
-          friction: 0.9,
-          frictionStatic: 0.9,
-          restitution: 0.0,
-          density: 0.0026,
-          chamfer: 6
-        });
-        spriteOrFallback(b, imgBeam, w, h, "rgba(210,170,90,0.55)");
-        addSleeping(b);
-
-        breakables.set(b.id, { hp: params.beamHP, maxHp: params.beamHP, type:"beam" });
-        structureBodies.push(b);
-        return b;
-      }
-
-      function makePillar(x,y,w,h, imgPillar){
-        const p = Bodies.rectangle(x,y,w,h,{
-          friction: 1.0,
-          frictionStatic: 1.0,
-          restitution: 0.0,
-          density: 0.0032,
-          chamfer: 8
-        });
-        spriteOrFallback(p, imgPillar, w, h, "rgba(190,140,70,0.55)");
-        addSleeping(p);
-
-        breakables.set(p.id, { hp: params.pillarHP, maxHp: params.pillarHP, type:"pillar" });
-        structureBodies.push(p);
-        return p;
-      }
-
-      function makeManager(x,y, imgManager){
-        const w = 86, h = 110;
-        const m = Bodies.rectangle(x,y,w,h,{
-          friction: 0.6,
-          restitution: 0.0,
-          density: 0.0016
-        });
-        spriteOrFallback(m, imgManager, w, h, "rgba(255,255,255,0.18)");
-        addSleeping(m);
-        managers.push(m);
-        return m;
-      }
-
-      function buildHouse(imgBeam, imgPillar, imgManager){
-        const hx = params.houseX();
-        const baseY = params.houseYBase();
-
-        const pillarW = params.pillarW;
-        const pillarH = params.pillarH;
-
-        const beamW = params.beamW;
-        const beamH = params.beamH;
-
-        const floorW = params.floorBeamW;
-        const floorH = params.floorBeamH;
-
-        // геометрия
-        const leftPillarX = hx - beamW/2 + pillarW/2;
-        const rightPillarX = hx + beamW/2 - pillarW/2;
-
-        const pillarY = baseY - pillarH/2; // стоит на полу
-
-        const topBeamY = baseY - pillarH + beamH/2;
-        const bottomBeamY = baseY - beamH/2;
-
-        const midBeamY = baseY - pillarH/2;          // “перекрытие” между этажами
-        const upperFloorY = baseY - pillarH + 85;    // верхний “пол”/перекладина под менеджеров
-
-        // 2 pillar
-        const leftP = makePillar(leftPillarX, pillarY, pillarW, pillarH, imgPillar);
-        const rightP = makePillar(rightPillarX, pillarY, pillarW, pillarH, imgPillar);
-
-        // 2 beam сверху/снизу
-        const topB = makeBeam(hx, topBeamY, beamW, beamH, imgBeam);
-        const bottomB = makeBeam(hx, bottomBeamY, beamW, beamH, imgBeam);
-
-        // “2 этажа” — перекладины
-        const midB = makeBeam(hx, midBeamY, floorW, floorH, imgBeam);
-        const upperB = makeBeam(hx, upperFloorY, floorW, floorH, imgBeam);
-
-        // аккуратно размещаем менеджеров: 3 сверху, 2 снизу
-        // важно: ширина этажа должна позволять менеджера — floorW достаточно.
-        const topY = upperFloorY - floorH/2 - 55;
-        const midY = midBeamY - floorH/2 - 55;
-
-        const spacingTop = 95;
-        const spacingMid = 115;
-
-        const topStartX = hx - spacingTop;
-        const midStartX = hx - spacingMid/2;
-
-        const m1 = makeManager(topStartX, topY, imgManager);
-        const m2 = makeManager(topStartX + spacingTop, topY, imgManager);
-        const m3 = makeManager(topStartX + spacingTop*2, topY, imgManager);
-
-        const m4 = makeManager(midStartX, midY, imgManager);
-        const m5 = makeManager(midStartX + spacingMid, midY, imgManager);
-
-        World.add(engine.world, [leftP, rightP, topB, bottomB, midB, upperB, m1, m2, m3, m4, m5]);
-      }
-
-      // =========================
-      // Bird + Slingshot
-      // =========================
-      function makeBird(imgIdle){
-        const x = params.birdStart.x;
-        const y = params.birdStart.y();
-
-        const w = 140, h = 110; // крупнее, как ты хотел
-        const b = Bodies.rectangle(x, y, w, h, {
-          friction: 0.6,
-          restitution: 0.0,
-          density: 0.0021
-        });
-        spriteOrFallback(b, imgIdle, w, h, "rgba(255,255,255,0.16)");
-
-        // чтобы не “проваливался” и не дрожал
-        b.sleepThreshold = 9999;
-        Sleeping.set(b, true);
-
-        return b;
-      }
-
-      function attachSlingshot(){
-        slingAnchor = { x: params.slingAnchor.x, y: params.slingAnchor.y() };
-        sling = Constraint.create({
-          pointA: slingAnchor,
-          bodyB: bird,
-          stiffness: 0.055,
-          damping: 0.12,
-          length: 0
-        });
-        World.add(engine.world, sling);
-      }
-
-      function setupMouse(){
-        if (mouseConstraint) {
-          World.remove(engine.world, mouseConstraint);
-          mouseConstraint = null;
-        }
-
-        const mouse = Mouse.create(render.canvas);
-        mouse.pixelRatio = render.options.pixelRatio;
-
+        // mouse control
+        const mouse = Mouse.create(canvas);
         mouseConstraint = MouseConstraint.create(engine, {
           mouse,
           constraint: {
-            stiffness: 0.02,
+            stiffness: 0.18,
+            damping: 0.08,
             render: { visible: false }
           }
         });
-        World.add(engine.world, mouseConstraint);
+        World.add(world, mouseConstraint);
+        render.mouse = mouse;
 
-        // ограничим растягивание (пока тянем)
-        Events.on(mouseConstraint, "mousemove", () => {
-          if (!bird || launched) return;
-          if (!mouseConstraint.body) return; // не тянем
+        // build level
+        buildStructure(IMGS);
+        spawnBird(IMGS, true);
 
-          const mp = mouse.position;
-          const dx = mp.x - slingAnchor.x;
-          const dy = mp.y - slingAnchor.y;
-          const dist = Math.sqrt(dx*dx + dy*dy);
+        // events
+        bindGameplay(IMGS);
 
-          if (dist > params.maxPull) {
-            const k = params.maxPull / dist;
-            const nx = slingAnchor.x + dx * k;
-            const ny = slingAnchor.y + dy * k;
-            Body.setPosition(bird, { x: nx, y: ny });
+        // render/run
+        Render.run(render);
+        Runner.run(runner, engine);
+
+        // UI
+        $("resetBtn").addEventListener("click", () => resetAll(IMGS));
+
+        // resize
+        window.addEventListener("resize", () => onResize(IMGS));
+
+        $("status").textContent = "Готово";
+        toast("Готово. Тяни человечка и отпускай 👍", 1600);
+        updateHUD();
+      }
+
+      function updateHUD() {
+        $("score").textContent = String(stats.score);
+        $("broken").textContent = String(stats.broken);
+        $("hits").textContent = String(stats.hits);
+      }
+
+      function onResize(IMGS) {
+        if (!render) return;
+
+        render.canvas.width = window.innerWidth;
+        render.canvas.height = window.innerHeight;
+        render.options.width = window.innerWidth;
+        render.options.height = window.innerHeight;
+
+        // пересоздадим весь уровень, чтобы не ловить смещения
+        resetAll(IMGS);
+      }
+
+      function resetAll(IMGS) {
+        // стоп таймера респавна
+        if (birdRespawnTimer) {
+          clearTimeout(birdRespawnTimer);
+          birdRespawnTimer = null;
+        }
+
+        // очистка мира
+        Composite.clear(world, false);
+
+        // заново: земля + мышь + домик + bird
+        World.add(world, ground);
+        World.add(world, mouseConstraint);
+
+        // stats
+        stats.score = 0;
+        stats.broken = 0;
+        stats.hits = 0;
+        updateHUD();
+
+        // очистка структуры
+        structure.pillars = [];
+        structure.beams = [];
+        structure.joints = [];
+        structure.managers = [];
+        structure.frozenUntil = 0;
+
+        bird = null;
+        birdLaunched = false;
+
+        buildStructure(IMGS);
+        spawnBird(IMGS, true);
+
+        $("status").textContent = "Готово";
+        toast("Уровень пересобран.", 1200);
+      }
+
+      // ---------- build structure ----------
+      function buildStructure(IMGS) {
+        const baseY = LAYOUT.houseBaseY();
+        const cx = LAYOUT.houseCenterX();
+        const w = LAYOUT.houseWidth;
+
+        // pillars positions
+        const leftX = cx - Math.round(w / 2);
+        const rightX = cx + Math.round(w / 2);
+
+        // sprite scale compute
+        const pillarScale = SPRITE_TARGET.pillarH / IMGS.imgPillar.height;
+        const beamScale = SPRITE_TARGET.beamW / IMGS.imgBeam.width;
+
+        // pillar bodies (статичные — чтобы домик не ехал/не падал сам)
+        const pillarH = IMGS.imgPillar.height * pillarScale;
+        const pillarW = IMGS.imgPillar.width * pillarScale;
+
+        const pLeft = Bodies.rectangle(leftX, baseY - pillarH / 2, pillarW, pillarH, {
+          isStatic: true,
+          render: {
+            sprite: {
+              texture: ASSETS.pillar,
+              xScale: pillarScale,
+              yScale: pillarScale
+            }
           }
         });
 
-        // отпуск
-        Events.on(mouseConstraint, "enddrag", (e) => {
-          if (!bird || launched) return;
-          if (e.body !== bird) return;
-          launchBird();
+        const pRight = Bodies.rectangle(rightX, baseY - pillarH / 2, pillarW, pillarH, {
+          isStatic: true,
+          render: {
+            sprite: {
+              texture: ASSETS.pillar,
+              xScale: pillarScale,
+              yScale: pillarScale
+            }
+          }
         });
-      }
 
-      function switchBirdSprite(imgFly){
-        if (!bird) return;
-        const w = 130, h = 100;
-        spriteOrFallback(bird, imgFly, w, h, "rgba(255,255,255,0.16)");
-      }
+        structure.pillars.push(pLeft, pRight);
 
-      function launchBird(){
-        if (!bird || launched) return;
+        // beams (динамические, но сначала "заморожены")
+        const beamW = IMGS.imgBeam.width * beamScale;
+        const beamH = IMGS.imgBeam.height * beamScale;
 
-        setStatus("Пуск!");
-        launched = true;
-        shots++;
-        $shots.textContent = shots;
+        const bTop = Bodies.rectangle(cx, LAYOUT.yTopBeam(), beamW, beamH, makeBeamOpts(beamScale));
+        const bMid = Bodies.rectangle(cx, LAYOUT.yMidBeam(), beamW, beamH, makeBeamOpts(beamScale));
+        const bBot = Bodies.rectangle(cx, LAYOUT.yBottomBeam(), beamW, beamH, makeBeamOpts(beamScale));
 
-        // разбудим птицу
-        Sleeping.set(bird, false);
-        bird.sleepThreshold = 60;
+        structure.beams.push(bTop, bMid, bBot);
 
-        // отсоединяем стропу
-        World.remove(engine.world, sling);
-        sling = null;
+        // joints to pillars (ломаемые)
+        const joints = [];
 
-        // считаем импульс по натяжке
-        const dx = slingAnchor.x - bird.position.x;
-        const dy = slingAnchor.y - bird.position.y;
-        const pull = Math.min(params.maxPull, Math.sqrt(dx*dx + dy*dy));
+        // helper create joint at local points
+        function beamToPillarJoint(beam, pillar, offsetX) {
+          // offsetX: -1 = left end, +1 = right end
+          const px = offsetX * (beamW / 2 - 14);
+          const joint = Constraint.create({
+            bodyA: beam,
+            pointA: { x: px, y: 0 },
+            bodyB: pillar,
+            pointB: { x: 0, y: 0 },
+            stiffness: 0.9,
+            damping: 0.05,
+            length: 0,
+            render: { visible: false }
+          });
+          joint.__breakable = true;
+          joint.__broken = false;
+          joints.push(joint);
+          return joint;
+        }
 
-        // нормализуем
-        const dir = Vector.normalise({ x: dx, y: dy });
+        // top
+        beamToPillarJoint(bTop, pLeft, -1);
+        beamToPillarJoint(bTop, pRight, +1);
+        // mid
+        beamToPillarJoint(bMid, pLeft, -1);
+        beamToPillarJoint(bMid, pRight, +1);
+        // bottom
+        beamToPillarJoint(bBot, pLeft, -1);
+        beamToPillarJoint(bBot, pRight, +1);
 
-        // сила
-        const impulseMag = pull * params.power;
-        const impulse = { x: dir.x * impulseMag, y: dir.y * impulseMag };
+        structure.joints = joints;
 
-        // поднимем полёт чуть выше (чтобы не в пол)
-        impulse.y -= 0.006;
+        // managers: ставим на mid beam, равномерно
+        const managers = [];
+        const mScale = SPRITE_TARGET.managerW / IMGS.imgManager.width;
+        const mW = IMGS.imgManager.width * mScale;
+        const mH = IMGS.imgManager.height * mScale;
 
-        Body.applyForce(bird, bird.position, impulse);
+        for (let i = 0; i < LAYOUT.managersCount; i++) {
+          const t = (i + 1) / (LAYOUT.managersCount + 1);
+          const x = cx - w * 0.28 + t * (w * 0.56);
+          const y = LAYOUT.yMidBeam() - beamH / 2 - mH / 2 + 6;
 
-        // авто-ресpawn через 2.7 сек, домик НЕ ресетим
-        clearTimeout(respawnTimer);
-        respawnTimer = setTimeout(() => {
-          respawnBirdOnly();
-        }, params.autoRespawnMs);
-      }
-
-      function respawnBirdOnly(){
-        setStatus("Респавн птицы (домик остаётся поломанным)");
-        // удалить старую птицу если улетела / мешает
-        if (bird) World.remove(engine.world, bird);
-
-        launched = false;
-
-        // новая птица
-        bird = makeBird(loaded.birdIdle);
-        World.add(engine.world, bird);
-
-        // вернуть стропу
-        attachSlingshot();
-        setupMouse();
-        setStatus("Готов");
-      }
-
-      // =========================
-      // Break system (ломаем балки)
-      // =========================
-      function spawnDebrisFrom(body, imgBeam){
-        // создаем 3 обломка
-        const { x, y } = body.position;
-        const angle = body.angle;
-
-        const pieces = [];
-        for (let i=0;i<3;i++){
-          const w = 46 + Math.random()*30;
-          const h = 16 + Math.random()*14;
-          const px = x + (Math.random()-0.5)*40;
-          const py = y + (Math.random()-0.5)*20;
-
-          const piece = Bodies.rectangle(px, py, w, h, {
+          const m = Bodies.rectangle(x, y, mW, mH, {
+            restitution: 0.1,
             friction: 0.9,
-            restitution: 0.0,
-            density: 0.0018,
-            angle: angle + (Math.random()-0.5)*0.6
+            frictionAir: 0.02,
+            density: 0.002,
+            render: {
+              sprite: {
+                texture: ASSETS.manager,
+                xScale: mScale,
+                yScale: mScale
+              }
+            }
           });
 
-          // можно тем же beam.png (будет норм)
-          spriteOrFallback(piece, imgBeam, w, h, "rgba(210,170,90,0.55)");
-          pieces.push(piece);
-          debris.push(piece);
-
-          // чуть толкнём
-          Body.applyForce(piece, piece.position, {
-            x: (Math.random()-0.5)*0.005,
-            y: (Math.random()-0.5)*0.005
-          });
+          m.__isManager = true;
+          m.__alive = true;
+          managers.push(m);
         }
-        World.add(engine.world, pieces);
+
+        structure.managers = managers;
+
+        // add to world
+        World.add(world, [pLeft, pRight, bTop, bMid, bBot, ...joints, ...managers]);
+
+        // "не разваливаться на старте": заморозка коротко (сон + временно гасим скорости)
+        structure.frozenUntil = performance.now() + 700;
+        for (const b of structure.beams) {
+          Body.setVelocity(b, { x: 0, y: 0 });
+          Body.setAngularVelocity(b, 0);
+          b.isSleeping = true;
+        }
+        for (const m of structure.managers) {
+          Body.setVelocity(m, { x: 0, y: 0 });
+          Body.setAngularVelocity(m, 0);
+          m.isSleeping = true;
+        }
       }
 
-      function damageBody(body, dmg){
-        const rec = breakables.get(body.id);
-        if (!rec) return;
+      function makeBeamOpts(beamScale) {
+        return {
+          restitution: 0.05,
+          friction: 0.9,
+          frictionAir: 0.01,
+          density: 0.0018,
+          render: {
+            sprite: {
+              texture: ASSETS.beam,
+              xScale: beamScale,
+              yScale: beamScale
+            }
+          }
+        };
+      }
 
-        rec.hp -= dmg;
+      // ---------- bird ----------
+      function spawnBird(IMGS, fresh = false) {
+        const baseY = window.innerHeight - LAYOUT.floorHeight;
+        const x = LAYOUT.birdStartX;
+        const y = baseY - LAYOUT.birdStartYOffset;
 
-        if (rec.hp <= 0){
-          // ломаем
-          breakables.delete(body.id);
+        const idleScale = SPRITE_TARGET.birdWIdle / IMGS.imgIdle.width;
+        const flyScale = SPRITE_TARGET.birdWFly / IMGS.imgFly.width;
 
-          // счет
-          if (rec.type === "beam") {
-            brokenBeams++;
-            $broken.textContent = brokenBeams;
-            score += 10;
-            $score.textContent = score;
-          } else if (rec.type === "pillar") {
-            score += 15;
-            $score.textContent = score;
+        // bird collider (не равен картинке, так стабильнее)
+        const r = 26;
+
+        bird = Bodies.circle(x, y, r, {
+          restitution: 0.15,
+          friction: 0.9,
+          frictionAir: 0.012,
+          density: 0.004,
+          render: {
+            sprite: {
+              texture: ASSETS.humanIdle,
+              xScale: idleScale,
+              yScale: idleScale
+            }
+          }
+        });
+
+        bird.__flyTexture = ASSETS.humanFly;
+        bird.__idleTexture = ASSETS.humanIdle;
+        bird.__flyScale = flyScale;
+        bird.__idleScale = idleScale;
+
+        birdLaunched = false;
+
+        World.add(world, bird);
+
+        if (fresh) {
+          $("status").textContent = "Готово";
+        }
+      }
+
+      function setBirdIdle() {
+        if (!bird) return;
+        bird.render.sprite.texture = bird.__idleTexture;
+        bird.render.sprite.xScale = bird.__idleScale;
+        bird.render.sprite.yScale = bird.__idleScale;
+      }
+
+      function setBirdFly() {
+        if (!bird) return;
+        bird.render.sprite.texture = bird.__flyTexture;
+        bird.render.sprite.xScale = bird.__flyScale;
+        bird.render.sprite.yScale = bird.__flyScale;
+      }
+
+      // ---------- gameplay ----------
+      function bindGameplay(IMGS) {
+        // drag limit + launch
+        Events.on(mouseConstraint, "startdrag", (e) => {
+          if (!bird || e.body !== bird) return;
+          if (birdLaunched) return;
+          $("status").textContent = "Натяжка…";
+        });
+
+        Events.on(mouseConstraint, "enddrag", (e) => {
+          if (!bird || e.body !== bird) return;
+          if (birdLaunched) return;
+
+          // launch vector: from start position to current, but reversed
+          const baseY = window.innerHeight - LAYOUT.floorHeight;
+          const start = { x: LAYOUT.birdStartX, y: baseY - LAYOUT.birdStartYOffset };
+          const pos = bird.position;
+
+          const dx = start.x - pos.x;
+          const dy = start.y - pos.y;
+
+          // clamp pull
+          const pullMax = 130;
+          const pull = Math.min(pullMax, Math.hypot(dx, dy));
+          const k = pull / (Math.hypot(dx, dy) || 1);
+
+          const ndx = dx * k;
+          const ndy = dy * k;
+
+          // power (уменьшаем, чтобы не улетал за экран)
+          const power = 0.15; // было слишком сильно — это мягче
+          const vx = ndx * power;
+          const vy = ndy * power;
+
+          // вернуть в старт и дать скорость (как angry birds)
+          Body.setPosition(bird, start);
+          Body.setVelocity(bird, { x: vx, y: vy });
+          Body.setAngularVelocity(bird, 0.18);
+
+          birdLaunched = true;
+          setBirdFly();
+
+          $("status").textContent = "Полетел!";
+          stats.score += 1;
+          updateHUD();
+
+          // 2.5 сек “ломаем”, затем респавн птицы (домик не трогаем)
+          scheduleBirdRespawn(IMGS, 2500);
+        });
+
+        // collision — ломаем joints + считаем попадания по менеджерам
+        Events.on(engine, "collisionStart", (event) => {
+          const now = performance.now();
+
+          for (const pair of event.pairs) {
+            const a = pair.bodyA;
+            const b = pair.bodyB;
+
+            // менеджер hit
+            if ((a.__isManager && b === bird) || (b.__isManager && a === bird)) {
+              const m = a.__isManager ? a : b;
+              const relSpeed = pair.collision && pair.collision.penetration
+                ? Math.hypot(pair.collision.penetration.x, pair.collision.penetration.y)
+                : 0;
+
+              const v = bird ? Math.hypot(bird.velocity.x, bird.velocity.y) : 0;
+              if (m.__alive && v > MANAGER_HIT_SPEED) {
+                m.__alive = false;
+                stats.hits += 1;
+                stats.score += 25;
+                updateHUD();
+                toast("Менеджер получил по KPI 😵", 900);
+              }
+            }
+
+            // joint breaking based on impact energy
+            // считаем "удар" как относительную скорость
+            const va = Math.hypot(a.velocity.x, a.velocity.y);
+            const vb = Math.hypot(b.velocity.x, b.velocity.y);
+            const impact = Math.abs(va - vb);
+
+            // домик заморожен на старте — не ломаем
+            if (now < structure.frozenUntil) continue;
+
+            if (impact > JOINT_BREAK_THRESHOLD) {
+              tryBreakSomeJointNear(pair);
+            }
+          }
+        });
+
+        // before update: держим домик в “сне” первые 0.7s
+        Events.on(engine, "beforeUpdate", () => {
+          const now = performance.now();
+          if (now < structure.frozenUntil) {
+            // гасим скорость чтобы ничего не поехало
+            for (const b of structure.beams) {
+              Body.setVelocity(b, { x: 0, y: 0 });
+              Body.setAngularVelocity(b, 0);
+              b.isSleeping = true;
+            }
+            for (const m of structure.managers) {
+              Body.setVelocity(m, { x: 0, y: 0 });
+              Body.setAngularVelocity(m, 0);
+              m.isSleeping = true;
+            }
           }
 
-          // заменить на debris
-          const isBeam = rec.type === "beam";
-          const tex = loaded.beam;
+          // если птица улетела слишком далеко — респавним раньше
+          if (bird && birdLaunched) {
+            const out =
+              bird.position.x < -200 ||
+              bird.position.x > window.innerWidth + 200 ||
+              bird.position.y > window.innerHeight + 400 ||
+              bird.position.y < -400;
 
-          World.remove(engine.world, body);
-
-          // убрать из массивов
-          structureBodies = structureBodies.filter(b => b.id !== body.id);
-
-          spawnDebrisFrom(body, tex);
-
-          setStatus("ХРЯСЬ! (сломалось)");
-        }
-      }
-
-      // collision -> считаем силу по относительной скорости
-      Events.on(engine, "collisionStart", (evt) => {
-        for (const pair of evt.pairs) {
-          const a = pair.bodyA;
-          const b = pair.bodyB;
-
-          const aRec = breakables.get(a.id);
-          const bRec = breakables.get(b.id);
-
-          // относительная скорость
-          const rvx = (a.velocity.x - b.velocity.x);
-          const rvy = (a.velocity.y - b.velocity.y);
-          const relSpeed = Math.sqrt(rvx*rvx + rvy*rvy);
-
-          if (relSpeed < params.breakHitMin) continue;
-
-          // урон
-          const dmg = Math.min(40, relSpeed * 4.2);
-
-          if (aRec) damageBody(a, dmg);
-          if (bRec) damageBody(b, dmg);
-        }
-      });
-
-      // =========================
-      // Draw sling line (красиво)
-      // =========================
-      Events.on(render, "afterRender", () => {
-        const ctx = render.context;
-        if (!ctx) return;
-
-        // рисуем резинку только если не запущено
-        if (bird && !launched && slingAnchor) {
-          ctx.save();
-          ctx.lineWidth = 6;
-          ctx.strokeStyle = "rgba(255,80,80,0.95)";
-          ctx.beginPath();
-          ctx.moveTo(slingAnchor.x, slingAnchor.y);
-          ctx.lineTo(bird.position.x, bird.position.y);
-          ctx.stroke();
-
-          ctx.lineWidth = 2;
-          ctx.strokeStyle = "rgba(255,255,255,0.45)";
-          ctx.stroke();
-          ctx.restore();
-        }
-      });
-
-      // =========================
-      // Reset (всё заново)
-      // =========================
-      function fullReset(){
-        setStatus("Сброс...");
-
-        clearTimeout(respawnTimer);
-        respawnTimer = null;
-
-        // очистить мир, но оставить стены/пол
-        Composite.clear(engine.world, false);
-
-        // пересоздать пол/стены
-        floorBody = makeFloor();
-
-        // сброс статистики
-        score = 0; brokenBeams = 0; shots = 0;
-        $score.textContent = "0";
-        $broken.textContent = "0";
-        $shots.textContent = "0";
-
-        // очистить ссылки
-        structureBodies = [];
-        managers = [];
-        debris = [];
-        breakables.clear();
-
-        launched = false;
-
-        // домик + птица
-        buildHouse(loaded.beam, loaded.pillar, loaded.manager);
-        bird = makeBird(loaded.birdIdle);
-        World.add(engine.world, bird);
-
-        attachSlingshot();
-        setupMouse();
-
-        setStatus("Готов");
-      }
-
-      resetBtn.addEventListener("click", fullReset);
-
-      // =========================
-      // Load assets then start
-      // =========================
-      const loaded = {
-        beam:null, pillar:null, manager:null,
-        birdIdle:null, birdFly:null
-      };
-
-      async function boot(){
-        setStatus("Загрузка ассетов...");
-
-        // грузим PNG
-        const [beam, pillar, manager, birdIdle, birdFly] = await Promise.all([
-          loadImage(ASSETS.beam),
-          loadImage(ASSETS.pillar),
-          loadImage(ASSETS.manager),
-          loadImage(ASSETS.birdIdle),
-          loadImage(ASSETS.birdFly)
-        ]);
-
-        loaded.beam = beam;
-        loaded.pillar = pillar;
-        loaded.manager = manager;
-        loaded.birdIdle = birdIdle;
-        loaded.birdFly = birdFly;
-
-        // подсказка в статус: если что-то не загрузилось
-        const missing = [];
-        if (!beam) missing.push("beam.png");
-        if (!pillar) missing.push("pillar.png");
-        if (!manager) missing.push("manager.png");
-        if (!birdIdle) missing.push("human_idle.png");
-        if (!birdFly) missing.push("human_fly.png");
-
-        if (missing.length){
-          setStatus("Часть PNG не загрузилась: " + missing.join(", ") + " (включён fallback)");
-        } else {
-          setStatus("Готов");
-        }
-
-        // строим дом + птица
-        buildHouse(loaded.beam, loaded.pillar, loaded.manager);
-
-        bird = makeBird(loaded.birdIdle);
-        World.add(engine.world, bird);
-
-        attachSlingshot();
-        setupMouse();
-
-        // при запуске дом не должен “поползти”
-        // sleeping уже включён, но на всякий разбудим только при первом попадании
-        setStatus("Готов");
-
-        // переключаем спрайт птицы на летящий после старта движения
-        Events.on(engine, "afterUpdate", () => {
-          if (!bird) return;
-          if (!launched) return;
-
-          // когда скорость заметная — ставим fly
-          const sp = Math.hypot(bird.velocity.x, bird.velocity.y);
-          if (sp > 2.2 && !bird.__flySet){
-            bird.__flySet = true;
-            switchBirdSprite(loaded.birdFly);
+            if (out) {
+              scheduleBirdRespawn(IMGS, 250);
+            }
           }
 
-          // если птица улетела далеко — можно убрать (чтобы не копилась)
-          if (bird.position.x > W() + 300 || bird.position.y > H() + 300 || bird.position.x < -300 || bird.position.y < -300){
-            // ждём ресpawn таймером, но чистим старую
-            World.remove(engine.world, bird);
+          // когда птица почти остановилась — вернуть idle текстуру (если близко к земле)
+          if (bird && birdLaunched) {
+            const speed = Math.hypot(bird.velocity.x, bird.velocity.y);
+            if (speed < 0.35 && bird.position.y > window.innerHeight - LAYOUT.floorHeight - 220) {
+              setBirdIdle();
+            }
+          }
+        });
+
+        // debug if needed:
+        // console.log("Matter OK:", typeof Matter, Matter);
+      }
+
+      function scheduleBirdRespawn(IMGS, delayMs) {
+        if (birdRespawnTimer) return; // уже запланирован
+
+        birdRespawnTimer = setTimeout(() => {
+          birdRespawnTimer = null;
+
+          if (bird) {
+            World.remove(world, bird);
             bird = null;
           }
-        });
+
+          spawnBird(IMGS, false);
+          setBirdIdle();
+          birdLaunched = false;
+
+          $("status").textContent = "Готово";
+        }, delayMs);
       }
 
-      boot();
+      function tryBreakSomeJointNear(pair) {
+        // простая логика: ломаем один ближайший неполоманный joint
+        // (чтобы не разваливало всё моментально)
+        const x = pair.collision.supports && pair.collision.supports[0]
+          ? pair.collision.supports[0].x
+          : (pair.bodyA.position.x + pair.bodyB.position.x) / 2;
+
+        const y = pair.collision.supports && pair.collision.supports[0]
+          ? pair.collision.supports[0].y
+          : (pair.bodyA.position.y + pair.bodyB.position.y) / 2;
+
+        let best = null;
+        let bestD = Infinity;
+
+        for (const j of structure.joints) {
+          if (!j.__breakable || j.__broken) continue;
+
+          // оценка позиции joint
+          const ax = j.bodyA ? j.bodyA.position.x + (j.pointA ? j.pointA.x : 0) : 0;
+          const ay = j.bodyA ? j.bodyA.position.y + (j.pointA ? j.pointA.y : 0) : 0;
+
+          const d = (ax - x) * (ax - x) + (ay - y) * (ay - y);
+          if (d < bestD) {
+            bestD = d;
+            best = j;
+          }
+        }
+
+        // ломаем только если достаточно близко
+        if (best && bestD < 180 * 180) {
+          best.__broken = true;
+          World.remove(world, best);
+
+          stats.broken += 1;
+          stats.score += 10;
+          updateHUD();
+          toast("Хруст! Балка пошла…", 700);
+
+          // чуть “ослабим” ближайшую балку (чтобы эффект был заметнее)
+          if (best.bodyA && !best.bodyA.isStatic) {
+            best.bodyA.frictionAir = Math.min(0.06, (best.bodyA.frictionAir || 0.01) + 0.01);
+          }
+        }
+      }
+
     })();
   </script>
 </body>
