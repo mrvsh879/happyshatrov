@@ -2,7 +2,8 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <!-- ✅ mobile + disable page zoom (we do camera zoom instead) -->
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
   <title>Office Birds — Destruction</title>
 
   <style>
@@ -10,6 +11,8 @@
       margin:0; padding:0; width:100%; height:100%;
       overflow:hidden; background:#050a12;
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      -webkit-user-select:none; user-select:none;
+      -webkit-touch-callout:none;
     }
     #wrap { position:fixed; inset:0; }
     canvas { display:block; width:100%; height:100%; touch-action:none; }
@@ -17,8 +20,11 @@
     .hud {
       position:fixed; left:16px; top:16px; z-index:10;
       display:flex; gap:12px; align-items:flex-start;
+      max-width: calc(100vw - 32px);
+      pointer-events:none; /* allow canvas interactions; panels/buttons re-enable */
     }
     .panel {
+      pointer-events:auto;
       background:rgba(9,18,28,.55);
       border:1px solid rgba(255,255,255,.12);
       border-radius:10px;
@@ -31,16 +37,20 @@
     .panel h1{ font-size:14px; margin:0 0 6px 0; font-weight:900; letter-spacing:.2px; }
     .panel small{ display:block; opacity:.88; font-size:12px; line-height:1.35; }
 
-    .btnbar{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .btnbar{
+      pointer-events:auto;
+      display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+    }
     button{
       background:rgba(255,255,255,.10);
       color:rgba(255,255,255,.92);
       border:1px solid rgba(255,255,255,.16);
-      padding:8px 12px;
-      border-radius:10px;
+      padding:10px 14px;
+      border-radius:12px;
       cursor:pointer;
       font-weight:900;
       user-select:none;
+      touch-action: manipulation;
     }
     button:hover{ background:rgba(255,255,255,.16); }
     button.super-on{
@@ -49,8 +59,16 @@
       box-shadow: 0 0 0 2px rgba(255, 210, 70, .14) inset;
     }
 
-    .right{ position:fixed; top:16px; right:16px; z-index:10; width:360px; }
-    .kv{ display:grid; grid-template-columns:1fr auto; gap:6px 10px; margin-top:8px; font-size:12px; opacity:.95; }
+    .right{
+      position:fixed; top:16px; right:16px; z-index:10; width:360px;
+      pointer-events:none;
+    }
+    .right .panel{ pointer-events:auto; }
+
+    .kv{
+      display:grid; grid-template-columns:1fr auto;
+      gap:6px 10px; margin-top:8px; font-size:12px; opacity:.95;
+    }
     .kv div:nth-child(2n){ font-weight:900; }
 
     .toast{
@@ -60,10 +78,14 @@
       border-radius:999px; backdrop-filter: blur(6px);
       pointer-events:none; opacity:0; transition:opacity .18s ease;
       box-shadow:0 10px 30px rgba(0,0,0,.25);
+      max-width: calc(100vw - 24px);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .toast.show{ opacity:1; }
 
-    /* SUPER кнопка */
+    /* SUPER кнопка (как было — большая) */
     .super-fly {
       position: fixed;
       left: 50%;
@@ -71,6 +93,7 @@
       transform: translateX(-50%);
       z-index: 20;
       display: none;
+      pointer-events:auto;
     }
     .super-fly.show { display:block; }
 
@@ -78,19 +101,14 @@
       font-size: 32px;
       padding: 38px 68px;
       border-radius: 28px;
-
       border: 3px solid rgba(255,210,70,.75);
       background: rgba(255,210,70,.18);
-
       box-shadow:
         0 20px 70px rgba(0,0,0,.48),
         0 0 0 5px rgba(255,210,70,.14) inset;
-
       letter-spacing: 1.1px;
     }
-    .super-fly button:hover{
-      background: rgba(255,210,70,.26);
-    }
+    .super-fly button:hover{ background: rgba(255,210,70,.26); }
     .super-fly button.super-on{
       background: rgba(255,210,70,.33);
       box-shadow:
@@ -107,10 +125,106 @@
       user-select:none;
       pointer-events:none;
     }
+
+    /* ✅ START MENU overlay */
+    .menu {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.72);
+      backdrop-filter: blur(8px);
+    }
+    .menu.show { display: flex; }
+    .menu-card{
+      width: min(760px, calc(100vw - 40px));
+      border-radius: 18px;
+      padding: 24px 22px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(12,18,28,0.75);
+      box-shadow: 0 30px 120px rgba(0,0,0,0.55);
+      text-align: center;
+      color: rgba(255,255,255,0.95);
+      pointer-events:auto;
+    }
+    .menu-card h2{
+      margin: 0 0 10px 0;
+      font-size: 38px;
+      letter-spacing: 0.5px;
+      font-weight: 1000;
+    }
+    .menu-card p{
+      margin: 0 auto 14px auto;
+      max-width: 560px;
+      opacity: .9;
+      line-height: 1.45;
+      font-size: 15px;
+    }
+    .menu-start{
+      margin-top: 14px;
+      font-size: 28px;
+      padding: 20px 42px;
+      border-radius: 18px;
+      border: 2px solid rgba(255,210,70,.75);
+      background: rgba(255,210,70,.20);
+      box-shadow:
+        0 18px 80px rgba(0,0,0,.55),
+        0 0 0 6px rgba(255,210,70,.10) inset;
+    }
+    .menu-start:hover{ background: rgba(255,210,70,.30); }
+    .menu-mini{
+      margin-top: 12px;
+      font-size: 12px;
+      opacity: .85;
+    }
+    .kbd{
+      display:inline-block;
+      padding: 2px 7px;
+      border-radius: 7px;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.08);
+      font-weight: 800;
+      font-size: 12px;
+      margin: 0 3px;
+    }
+
+    /* ✅ Mobile layout tweaks */
+    @media (max-width: 820px){
+      .hud{ left:10px; top:10px; flex-direction:column; gap:10px; }
+      .panel{ min-width: 0; width: min(420px, calc(100vw - 20px)); }
+      .right{ right:10px; top:auto; bottom:10px; width: auto; max-width: 420px; }
+      .right .panel{ width: min(420px, calc(100vw - 20px)); }
+      .super-fly{ bottom: 18px; }
+      .super-fly button{ font-size: 28px; padding: 30px 52px; border-radius: 24px; }
+      .menu-card h2{ font-size: 30px; }
+      .menu-start{ font-size: 24px; padding: 18px 36px; }
+      button{ padding: 12px 14px; }
+    }
   </style>
 </head>
 
 <body>
+  <!-- ✅ START MENU -->
+  <div class="menu show" id="startMenu">
+    <div class="menu-card">
+      <h2>OFFICE BIRDS</h2>
+      <p>
+        Зажми человечка, тяни в любую сторону и отпускай — он летит в противоположную.
+        Во время полёта можно нажать <b>SUPER</b> для режима “Раскачаемся!!!”.
+      </p>
+      <p style="margin-top:10px; opacity:.85;">
+        ✅ <b>Масштаб:</b> колесо мыши или pinch двумя пальцами.<br/>
+        ✅ <b>+ / − / 100%:</b> кнопки зума сверху.
+      </p>
+      <button class="menu-start" id="startBtn">START GAME</button>
+      <div class="menu-mini">
+        Подсказка: <span class="kbd">R</span> — reset, <span class="kbd">D</span> — debug, <span class="kbd">+</span>/<span class="kbd">-</span> — zoom.
+      </div>
+    </div>
+  </div>
+
   <div class="hud">
     <div class="panel">
       <h1>Office Birds — Destruction</h1>
@@ -128,6 +242,11 @@
     <div class="btnbar">
       <button id="resetBtn">Reset</button>
       <button id="debugBtn">DEBUG</button>
+
+      <!-- ✅ Zoom UI -->
+      <button id="zoomOutBtn">−</button>
+      <button id="zoomInBtn">+</button>
+      <button id="zoomResetBtn">100%</button>
     </div>
   </div>
 
@@ -139,6 +258,7 @@
       <div class="kv">
         <div>Статус:</div><div id="status">Загрузка…</div>
         <div>SUPER:</div><div id="superState">OFF</div>
+        <div>ZOOM:</div><div id="zoomLabel">100%</div>
       </div>
     </div>
   </div>
@@ -173,6 +293,23 @@
         img.src = src + (src.includes("?") ? "&" : "?") + "v=" + Date.now();
       });
     }
+
+    // ✅ START MENU CONTROL
+    const startMenu = $("startMenu");
+    const startBtn  = $("startBtn");
+    let GAME_STARTED = false;
+
+    function showMenu(){
+      GAME_STARTED = false;
+      startMenu.classList.add("show");
+      if (runner) runner.enabled = false;
+    }
+    function hideMenu(){
+      GAME_STARTED = true;
+      startMenu.classList.remove("show");
+      if (runner) runner.enabled = true;
+    }
+    startBtn.addEventListener("click", hideMenu);
 
     // ассеты
     const ASSETS = {
@@ -246,23 +383,15 @@
       settleFrictionAir: 0.012
     };
 
-    // урон/ломание (исправлено: ломаем не по микроколлизиям, а по HP от удара птицы / SUPER-каста)
+    // урон/ломание
     const DMG = {
-      // ✅ Ломание НЕ по одному удару, а через HP (снимается только от удара птицы,
-      //    либо от SUPER-ауры после нажатия кнопки SUPER)
-      dmgK: 0.08,               // чем меньше — тем дольше живут объекты
-      minHitEnergy: 1.8,        // игнор слабых касаний
-
-      // HP на каждую стадию (целый -> половинки -> четвертинки)
+      dmgK: 0.08,
+      minHitEnergy: 1.8,
       hpStage0: 1.25,
       hpStage1: 1.10,
       hpStage2: 0.90,
-
-      // шейк камеры
       shakeEnergyThreshold: 9.0,
       shakeMax: 22,
-
-      // SUPER (усиление ТОЛЬКО после нажатия кнопки)
       superMultiplier: 2.8,
       superAuraRadius: 240,
       superAuraEnergyPerTick: 12.0,
@@ -300,22 +429,37 @@
       ]
     };
 
+    // ✅ Camera + user zoom (added, but DOES NOT break old logic)
     const camera = {
       cx: 0, cy: 0,
       tx: 0, ty: 0,
       zoom: 1.0,
       tzoom: 1.0,
-      smoothing: 0.14
+      smoothing: 0.14,
+
+      baseZoom: 0.86,   // (was 0.86)
+      userZoom: 1.0     // ✅ user controlled multiplier
+    };
+
+    const ZOOM = {
+      min: 0.55,
+      max: 1.85,
+      step: 1.10
     };
 
     function lerp(a,b,t){ return a + (b-a)*t; }
     function clamp(v,min,max){ return Math.max(min, Math.min(max,v)); }
 
+    function setUserZoom(mult, showToast=true){
+      camera.userZoom = clamp(mult, ZOOM.min, ZOOM.max);
+      const pct = Math.round(camera.userZoom * 100);
+      $("zoomLabel").textContent = pct + "%";
+      $("zoomResetBtn").textContent = pct + "%";
+      if (showToast) toast("ZOOM: " + pct + "%", 700);
+    }
+
     // рогатка
-    const SLING = {
-      pullMax: 420,
-      launchK: 0.165
-    };
+    const SLING = { pullMax: 420, launchK: 0.165 };
 
     // прицеливание
     const AIM = {
@@ -369,7 +513,13 @@
       $("wins").textContent   = String(stats.wins);
       $("superState").textContent = superActive ? "ON" : "OFF";
       refreshSuperButtonVisibility();
+      $("zoomLabel").textContent = Math.round(camera.userZoom * 100) + "%";
     }
+
+    // ✅ Zoom buttons
+    $("zoomInBtn").addEventListener("click", ()=> setUserZoom(camera.userZoom * ZOOM.step));
+    $("zoomOutBtn").addEventListener("click", ()=> setUserZoom(camera.userZoom / ZOOM.step));
+    $("zoomResetBtn").addEventListener("click", ()=> setUserZoom(1.0));
 
     $("status").textContent = "Загрузка ассетов…";
 
@@ -418,7 +568,6 @@
       engine.velocityIterations = 7;
       engine.constraintIterations = 3;
 
-      // ✅ важный момент: сначала выставляем DPI canvas, потом Render.create
       resizeCanvasToDisplaySize(canvas);
 
       render = Render.create({
@@ -469,17 +618,42 @@
       Render.run(render);
       Runner.run(runner, engine);
 
-      $("resetBtn").addEventListener("click", ()=>resetAll(IMGS));
+      // ✅ Start paused (menu shown)
+      runner.enabled = false;
+
+      $("resetBtn").addEventListener("click", ()=>{ resetAll(IMGS); showMenu(); });
       $("debugBtn").addEventListener("click", ()=>{
         DEBUG = !DEBUG;
         toast(DEBUG ? "DEBUG: ON" : "DEBUG: OFF", 900);
         resetAll(IMGS);
+        if (!GAME_STARTED) showMenu();
+      });
+
+      // ✅ wheel zoom (desktop)
+      canvas.addEventListener("wheel", (e)=>{
+        e.preventDefault();
+        const dir = Math.sign(e.deltaY);
+        if (dir > 0) setUserZoom(camera.userZoom / ZOOM.step, false);
+        else setUserZoom(camera.userZoom * ZOOM.step, false);
+      }, { passive:false });
+
+      // ✅ keyboard shortcuts
+      window.addEventListener("keydown", (e)=>{
+        if (e.key === "r" || e.key === "R"){ resetAll(IMGS); showMenu(); }
+        if (e.key === "d" || e.key === "D"){ DEBUG = !DEBUG; toast(DEBUG ? "DEBUG: ON" : "DEBUG: OFF", 900); resetAll(IMGS); if (!GAME_STARTED) showMenu(); }
+        if (e.key === "+" || e.key === "="){ setUserZoom(camera.userZoom * ZOOM.step); }
+        if (e.key === "-" || e.key === "_"){ setUserZoom(camera.userZoom / ZOOM.step); }
+        if ((e.key === "Enter" || e.key === " ") && !GAME_STARTED){ hideMenu(); }
       });
 
       window.addEventListener("resize", ()=>onResize(IMGS));
 
       $("status").textContent = "Готово";
+      setUserZoom(1.0, false);
       updateHUD();
+
+      // menu already shown
+      showMenu();
     }
 
     function onResize(IMGS){
@@ -488,6 +662,7 @@
       render.options.width = window.innerWidth;
       render.options.height = window.innerHeight;
       resetAll(IMGS);
+      if (!GAME_STARTED) showMenu();
     }
 
     function resetAll(IMGS){
@@ -529,10 +704,7 @@
       body.__tex = tex;
       body.__sx = sx;
       body.__sy = sy;
-
-      // ✅ HP чтобы не ломалось с первого удара
       body.__hp = DMG.hpStage0;
-
       return body;
     }
 
@@ -764,7 +936,8 @@
       const baseY = window.innerHeight - LEVEL.floorHeight;
       camera.cx = camera.tx = 900;
       camera.cy = camera.ty = baseY - 300;
-      camera.zoom = camera.tzoom = 0.86;
+      camera.baseZoom = 0.86;
+      camera.zoom = camera.tzoom = camera.baseZoom * camera.userZoom;
       applyCamera(true);
     }
 
@@ -798,7 +971,7 @@
       Render.lookAt(render, { min: render.bounds.min, max: render.bounds.max });
     }
 
-    // ======== INPUT (Pointer + Mouse/Touch fallback) ========
+    // ======== INPUT ========
     function pointerToWorld(clientX, clientY){
       const rect = render.canvas.getBoundingClientRect();
       const sx = (clientX - rect.left) / rect.width;
@@ -807,7 +980,41 @@
       return { x: b.min.x + sx * (b.max.x - b.min.x), y: b.min.y + sy * (b.max.y - b.min.y) };
     }
 
+    // ✅ pinch zoom support (2 pointers)
+    const pointers = new Map();
+    let pinching = false;
+    let pinchStartDist = 0;
+    let pinchStartZoom = 1.0;
+
+    function dist2(a,b){
+      const dx = a.x-b.x, dy=a.y-b.y;
+      return Math.sqrt(dx*dx+dy*dy);
+    }
+    function startPinchIfPossible(){
+      if (pointers.size !== 2) return;
+      const pts = Array.from(pointers.values());
+      pinching = true;
+      pinchStartDist = dist2(pts[0], pts[1]);
+      pinchStartZoom = camera.userZoom;
+      // stop slingshot drag if pinch begins
+      draggingBird = false;
+      dragView = null;
+    }
+    function updatePinch(){
+      if (!pinching || pointers.size !== 2) return;
+      const pts = Array.from(pointers.values());
+      const d = dist2(pts[0], pts[1]);
+      if (pinchStartDist <= 0) return;
+      const factor = d / pinchStartDist;
+      setUserZoom(pinchStartZoom * factor, false);
+    }
+    function endPinchIfNeeded(){
+      if (pointers.size < 2) pinching = false;
+    }
+
     function onDown(clientX, clientY, setCaptureFn){
+      if (!GAME_STARTED) return;
+      if (pinching) return;
       if (!bird || birdLaunched || !canLaunch) return;
       const p = pointerToWorld(clientX, clientY);
       const dist = Math.hypot(p.x - bird.position.x, p.y - bird.position.y);
@@ -821,6 +1028,8 @@
     }
 
     function onMove(clientX, clientY){
+      if (!GAME_STARTED) return;
+      if (pinching) return;
       if (!bird || !draggingBird || birdLaunched) return;
 
       const start = bird.__start;
@@ -836,6 +1045,8 @@
     }
 
     function onUp(IMGS){
+      if (!GAME_STARTED) return;
+      if (pinching) return;
       if (!bird || !draggingBird || birdLaunched) { draggingBird = false; dragView = null; return; }
       draggingBird = false; dragView = null;
       if (!canLaunch) return;
@@ -876,14 +1087,39 @@
     function bindInput(IMGS){
       const canvas = render.canvas;
 
-      // Pointer Events (modern)
       if (window.PointerEvent){
         canvas.addEventListener("pointerdown", (e)=>{
-          onDown(e.clientX, e.clientY, ()=>canvas.setPointerCapture(e.pointerId));
+          pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+
+          // if second pointer appears => pinch
+          if (pointers.size === 2){
+            startPinchIfPossible();
+          } else {
+            onDown(e.clientX, e.clientY, ()=>canvas.setPointerCapture(e.pointerId));
+          }
         });
-        canvas.addEventListener("pointermove", (e)=> onMove(e.clientX, e.clientY));
-        canvas.addEventListener("pointerup", ()=> onUp(IMGS));
-        canvas.addEventListener("pointercancel", ()=> onUp(IMGS));
+
+        canvas.addEventListener("pointermove", (e)=>{
+          if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+          if (pointers.size === 2){
+            updatePinch();
+          } else {
+            onMove(e.clientX, e.clientY);
+          }
+        });
+
+        canvas.addEventListener("pointerup", (e)=>{
+          pointers.delete(e.pointerId);
+          endPinchIfNeeded();
+          onUp(IMGS);
+        });
+
+        canvas.addEventListener("pointercancel", (e)=>{
+          pointers.delete(e.pointerId);
+          endPinchIfNeeded();
+          onUp(IMGS);
+        });
+
         return;
       }
 
@@ -902,7 +1138,7 @@
         onUp(IMGS);
       });
 
-      // Touch fallback (Safari)
+      // Touch fallback
       canvas.addEventListener("touchstart", (e)=>{
         e.preventDefault();
         const t = e.changedTouches[0];
@@ -1100,8 +1336,6 @@
       dstBody.__breakStage = srcBody.__breakStage;
       dstBody.__broken = false;
       dstBody.__debris = true;
-
-      // ✅ по умолчанию HP (после присвоения __breakStage мы его переопределим)
       dstBody.__hp = DMG.hpStage0;
 
       if (!DEBUG){
@@ -1131,7 +1365,6 @@
       if (!body) return;
       const stage = body.__breakStage || 0;
 
-      // менеджеры учитываем как "убиты" только один раз
       if (body.__type === "manager" && body.__alive){
         body.__alive = false;
         stats.hits += 1;
@@ -1141,7 +1374,6 @@
       }
 
       if (stage >= 2){
-        // vanish
         World.remove(world, body);
         stats.broken += 1;
         stats.score += 6;
@@ -1176,7 +1408,6 @@
           const b = makePiece(p2.x, p2.y, hw*0.95, ph*0.95, angle, body);
 
           a.__breakStage = 1; b.__breakStage = 1;
-
           a.__hp = DMG.hpStage1;
           b.__hp = DMG.hpStage1;
 
@@ -1198,7 +1429,6 @@
           const b = makePiece(p2.x, p2.y, pw*0.95, hh*0.95, angle, body);
 
           a.__breakStage = 1; b.__breakStage = 1;
-
           a.__hp = DMG.hpStage1;
           b.__hp = DMG.hpStage1;
 
@@ -1253,35 +1483,24 @@
       return 0.5 * massRef * rel * rel;
     }
 
-    // ✅ Исправлено: ломание только от удара птицы / SUPER-ауры после каста + HP по стадиям
     function tryBreak(body, energy, fromBird){
       if (!body || !body.__type) return;
-
-      // ✅ НЕ ломаем статики (пока стоят до броска / до активации)
       if (body.isStatic) return;
 
-      // ✅ Ломаем только от удара птицы,
-      // либо от SUPER-ауры (но она включается только после нажатия кнопки SUPER)
       const allow = (fromBird === true) || (superActive === true);
       if (!allow) return;
 
       const mult = superActive ? DMG.superMultiplier : 1.0;
       const e = energy * mult;
-
-      // игнор слабых касаний
       if (e < DMG.minHitEnergy) return;
 
-      // ✅ снимаем HP
       const dmg = e * DMG.dmgK;
       body.__hp = (typeof body.__hp === "number" ? body.__hp : DMG.hpStage0) - dmg;
 
       if (body.__hp > 0) return;
-
-      // HP кончился -> делим/исчезаем
       splitBodyByStage(body);
     }
 
-    // ✅ Исправлено: обычные коллизии домиков НЕ ломают.
     function processCollisionPairs(pairs){
       if (!structure.activated) return;
 
@@ -1291,7 +1510,6 @@
 
         if (energy >= DMG.shakeEnergyThreshold) triggerShake(energy);
 
-        // ✅ Ломаем только если в паре есть птица.
         if (bird && (a === bird || b === bird)){
           const other = (a === bird) ? b : a;
           tryBreak(other, energy, true);
@@ -1306,8 +1524,6 @@
       });
 
       Events.on(engine, "collisionActive", (event)=>{
-        // ✅ НЕ ломаем от микроконтактов (иначе домики крошатся сами).
-        // Оставляем только лёгкий шейк на очень сильных ударах.
         for (const pair of event.pairs){
           const energy = impactEnergy(pair.bodyA, pair.bodyB) * 0.12;
           if (energy >= DMG.shakeEnergyThreshold) triggerShake(energy);
@@ -1365,7 +1581,7 @@
         }
         if (superBannerFrames > 0) superBannerFrames -= 1;
 
-        // SUPER: скин + качание + аура ударов (урон только после каста — superActive включается кликом)
+        // SUPER: скин + качание + аура ударов
         if (superActive && bird && birdLaunched){
           superPulseT += 1;
           setBirdSuper();
@@ -1392,7 +1608,6 @@
               const t = 1 - (Math.sqrt(dist2) / r);
               const bonusEnergy = DMG.superAuraEnergyPerTick * (0.35 + 0.65*t);
 
-              // ✅ урон в ауре идёт только потому что superActive === true
               tryBreak(obj, bonusEnergy, false);
 
               if (!obj.isStatic){
@@ -1410,15 +1625,17 @@
           return;
         }
 
-        // camera follow
+        // camera follow (✅ keep old behavior, just multiply by userZoom)
+        const followZoom = (bird && birdLaunched) ? 1.10 : 0.86;
+
         if (bird && birdLaunched){
           camera.tx = bird.position.x + 280;
           camera.ty = bird.position.y - 140;
-          camera.tzoom = 1.10;
+          camera.tzoom = followZoom * camera.userZoom;
         } else {
           camera.tx = 900;
           camera.ty = baseY - 300;
-          camera.tzoom = 0.86;
+          camera.tzoom = followZoom * camera.userZoom;
         }
 
         applyCamera(false);
