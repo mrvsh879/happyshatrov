@@ -21,7 +21,7 @@
       position:fixed; left:16px; top:16px; z-index:10;
       display:flex; gap:12px; align-items:flex-start;
       max-width: calc(100vw - 32px);
-      pointer-events:none; /* allow canvas interactions; panels/buttons re-enable */
+      pointer-events:none;
     }
     .panel {
       pointer-events:auto;
@@ -216,7 +216,7 @@
       </p>
       <p style="margin-top:10px; opacity:.85;">
         ✅ <b>Масштаб:</b> колесо мыши или pinch двумя пальцами.<br/>
-        ✅ <b>+ / − / 100%:</b> кнопки зума сверху.
+        ✅ <b>Панорама:</b> держи 2 пальца и двигай — камера поедет.
       </p>
       <button class="menu-start" id="startBtn">START GAME</button>
       <div class="menu-mini">
@@ -243,7 +243,6 @@
       <button id="resetBtn">Reset</button>
       <button id="debugBtn">DEBUG</button>
 
-      <!-- ✅ Zoom UI -->
       <button id="zoomOutBtn">−</button>
       <button id="zoomInBtn">+</button>
       <button id="zoomResetBtn">100%</button>
@@ -320,7 +319,6 @@
       humanIdle: "assets/player/human_idle.png",
       humanFly: "assets/player/human_fly.png",
       chair: "assets/player/chair.png",
-      // SUPER-скин = человечек на стуле
       superSkin: "assets/player/human_idle.png"
     };
 
@@ -429,7 +427,7 @@
       ]
     };
 
-    // ✅ Camera + user zoom (added, but DOES NOT break old logic)
+    // ✅ Camera + user zoom + pan (NEW)
     const camera = {
       cx: 0, cy: 0,
       tx: 0, ty: 0,
@@ -437,8 +435,14 @@
       tzoom: 1.0,
       smoothing: 0.14,
 
-      baseZoom: 0.86,   // (was 0.86)
-      userZoom: 1.0     // ✅ user controlled multiplier
+      baseZoom: 0.86,
+      userZoom: 1.0,
+
+      // ✅ pan offsets in WORLD units
+      panX: 0,
+      panY: 0,
+      // while user pans with 2 fingers we keep it locked for some frames
+      panHoldFrames: 0
     };
 
     const ZOOM = {
@@ -652,7 +656,6 @@
       setUserZoom(1.0, false);
       updateHUD();
 
-      // menu already shown
       showMenu();
     }
 
@@ -685,6 +688,11 @@
       birdSwingBaseAngle = 0;
 
       shakeTime = 0; shakeMag = 0;
+
+      // ✅ reset camera pan too
+      camera.panX = 0;
+      camera.panY = 0;
+      camera.panHoldFrames = 0;
 
       buildLevel(IMGS);
       spawnBird(IMGS);
@@ -980,42 +988,93 @@
       return { x: b.min.x + sx * (b.max.x - b.min.x), y: b.min.y + sy * (b.max.y - b.min.y) };
     }
 
-    // ✅ pinch zoom support (2 pointers)
+    // ✅ pinch+pan support (2 pointers)
     const pointers = new Map();
     let pinching = false;
     let pinchStartDist = 0;
     let pinchStartZoom = 1.0;
 
+    // NEW for pan:
+    let lastMid = null;
+
     function dist2(a,b){
       const dx = a.x-b.x, dy=a.y-b.y;
       return Math.sqrt(dx*dx+dy*dy);
     }
+    function midPoint(a,b){
+      return { x:(a.x+b.x)/2, y:(a.y+b.y)/2 };
+    }
+
     function startPinchIfPossible(){
       if (pointers.size !== 2) return;
       const pts = Array.from(pointers.values());
       pinching = true;
       pinchStartDist = dist2(pts[0], pts[1]);
       pinchStartZoom = camera.userZoom;
+
+      lastMid = midPoint(pts[0], pts[1]);
+
       // stop slingshot drag if pinch begins
       draggingBird = false;
       dragView = null;
+
+      // hold pan (manual) for a bit
+      camera.panHoldFrames = Math.max(camera.panHoldFrames, 60);
     }
-    function updatePinch(){
+
+    function updatePinchAndPan(){
       if (!pinching || pointers.size !== 2) return;
+
       const pts = Array.from(pointers.values());
       const d = dist2(pts[0], pts[1]);
-      if (pinchStartDist <= 0) return;
-      const factor = d / pinchStartDist;
-      setUserZoom(pinchStartZoom * factor, false);
+      if (pinchStartDist > 0){
+        const factor = d / pinchStartDist;
+        setUserZoom(pinchStartZoom * factor, false);
+      }
+
+      // ✅ PAN: move by midpoint delta (screen -> world)
+      const m = midPoint(pts[0], pts[1]);
+      if (lastMid){
+        const dx = (m.x - lastMid.x);
+        const dy = (m.y - lastMid.y);
+        lastMid = m;
+
+        // convert screen delta to world delta using current bounds
+        const rect = render.canvas.getBoundingClientRect();
+        const b = render.bounds;
+        const vw = (b.max.x - b.min.x);
+        const vh = (b.max.y - b.min.y);
+
+        const worldDX = (dx / rect.width)  * vw;
+        const worldDY = (dy / rect.height) * vh;
+
+        // finger drag right should move camera right (scene left),
+        // so we subtract worldDX to "pull" the world
+        camera.panX -= worldDX;
+        camera.panY -= worldDY;
+
+        // clamp pan a bit (avoid losing the scene)
+        camera.panX = clamp(camera.panX, -2200, 2200);
+        camera.panY = clamp(camera.panY, -1200, 1200);
+
+        camera.panHoldFrames = Math.max(camera.panHoldFrames, 60);
+      }
     }
+
     function endPinchIfNeeded(){
-      if (pointers.size < 2) pinching = false;
+      if (pointers.size < 2){
+        pinching = false;
+        lastMid = null;
+        // keep pan for a bit after gesture, then decay
+        camera.panHoldFrames = Math.max(camera.panHoldFrames, 45);
+      }
     }
 
     function onDown(clientX, clientY, setCaptureFn){
       if (!GAME_STARTED) return;
       if (pinching) return;
       if (!bird || birdLaunched || !canLaunch) return;
+
       const p = pointerToWorld(clientX, clientY);
       const dist = Math.hypot(p.x - bird.position.x, p.y - bird.position.y);
       if (dist <= SPR.birdRadius * 1.25){
@@ -1091,7 +1150,6 @@
         canvas.addEventListener("pointerdown", (e)=>{
           pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
 
-          // if second pointer appears => pinch
           if (pointers.size === 2){
             startPinchIfPossible();
           } else {
@@ -1102,7 +1160,7 @@
         canvas.addEventListener("pointermove", (e)=>{
           if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
           if (pointers.size === 2){
-            updatePinch();
+            updatePinchAndPan();
           } else {
             onMove(e.clientX, e.clientY);
           }
@@ -1123,7 +1181,7 @@
         return;
       }
 
-      // Mouse fallback
+      // Mouse fallback (pan on desktop can be added later if you want)
       let mouseDown = false;
       canvas.addEventListener("mousedown", (e)=>{
         mouseDown = true;
@@ -1138,7 +1196,7 @@
         onUp(IMGS);
       });
 
-      // Touch fallback
+      // Touch fallback (single finger only)
       canvas.addEventListener("touchstart", (e)=>{
         e.preventDefault();
         const t = e.changedTouches[0];
@@ -1618,25 +1676,38 @@
           }
         }
 
-        // camera during drag
+        // camera during drag (keep as before)
         if (draggingBird && !birdLaunched){
           camera.tx = camera.cx; camera.ty = camera.cy; camera.tzoom = camera.zoom;
           applyCamera(false);
           return;
         }
 
-        // camera follow (✅ keep old behavior, just multiply by userZoom)
+        // ✅ base follow
         const followZoom = (bird && birdLaunched) ? 1.10 : 0.86;
 
+        let baseTx, baseTy;
         if (bird && birdLaunched){
-          camera.tx = bird.position.x + 280;
-          camera.ty = bird.position.y - 140;
-          camera.tzoom = followZoom * camera.userZoom;
+          baseTx = bird.position.x + 280;
+          baseTy = bird.position.y - 140;
         } else {
-          camera.tx = 900;
-          camera.ty = baseY - 300;
-          camera.tzoom = followZoom * camera.userZoom;
+          baseTx = 900;
+          baseTy = baseY - 300;
         }
+
+        // ✅ pan hold/decay: if user recently panned, keep; otherwise slowly return to 0
+        if (camera.panHoldFrames > 0){
+          camera.panHoldFrames -= 1;
+        } else {
+          camera.panX = lerp(camera.panX, 0, 0.045);
+          camera.panY = lerp(camera.panY, 0, 0.045);
+          if (Math.abs(camera.panX) < 0.15) camera.panX = 0;
+          if (Math.abs(camera.panY) < 0.15) camera.panY = 0;
+        }
+
+        camera.tx = baseTx + camera.panX;
+        camera.ty = baseTy + camera.panY;
+        camera.tzoom = followZoom * camera.userZoom;
 
         applyCamera(false);
         refreshSuperButtonVisibility();
