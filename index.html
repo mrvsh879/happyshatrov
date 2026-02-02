@@ -8,7 +8,7 @@
   <style>
     html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#06121f; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; }
     #wrap { position:fixed; inset:0; }
-    canvas { display:block; width:100%; height:100%; }
+    canvas { display:block; width:100%; height:100%; touch-action:none; }
 
     .hud { position:fixed; left:16px; top:16px; z-index:10; display:flex; gap:12px; align-items:flex-start; }
     .panel { background:rgba(9,18,28,.55); border:1px solid rgba(255,255,255,.12); border-radius:10px; padding:10px 12px; color:rgba(255,255,255,.92); backdrop-filter: blur(6px); box-shadow:0 10px 30px rgba(0,0,0,.25); min-width:270px; }
@@ -39,7 +39,7 @@
   <div class="hud">
     <div class="panel">
       <h1>Office Birds — Camera/Zoom</h1>
-      <small><b>Управление:</b> зажми человечка → тяни <b>влево</b> → отпусти (полетит <b>вправо</b>).</small>
+      <small><b>Управление:</b> зажми человечка → тяни в любую сторону → отпусти (полетит в противоположную).</small>
       <small>Сила = натяжение. <b>Стул появляется только после броска</b>.</small>
       <div class="kv">
         <div>Счёт:</div><div id="score">0</div>
@@ -104,11 +104,10 @@
 
     const {
       Engine, Render, Runner, World, Bodies, Body,
-      Constraint, Mouse, MouseConstraint, Events, Composite, Query, Vector
+      Constraint, Events, Composite, Vector
     } = Matter;
 
     let engine, world, render, runner, ground;
-    let mouse, mouseConstraint;
 
     let bird = null;
     let birdLaunched = false;
@@ -116,6 +115,7 @@
 
     let slingshot = null;
     let slingAnchor = null;
+
     let draggingBird = false;
     let canLaunch = true;
 
@@ -174,10 +174,12 @@
     function lerp(a,b,t){ return a + (b-a)*t; }
     function clamp(v,min,max){ return Math.max(min, Math.min(max,v)); }
 
-    // ====== НАСТРОЙКИ НАТЯЖЕНИЯ / СИЛЫ (УВЕЛИЧЕНО) ======
+    // ====== НАСТРОЙКИ НАТЯЖЕНИЯ / СИЛЫ ======
+    // pullMax = радиус "круга натяжения"
+    // launchK = сила броска (скорость)
     const SLING = {
-      pullMax: 320,      // было 220 — теперь круг натяжения больше
-      launchK: 0.095     // было 0.070 — теперь бросок сильнее
+      pullMax: 360,   // сделай 260..460
+      launchK: 0.125  // сделай 0.08..0.16
     };
 
     $("status").textContent = "Загрузка ассетов…";
@@ -245,21 +247,12 @@
       );
       World.add(world, ground);
 
-      mouse = Mouse.create(canvas);
-      mouse.pixelRatio = render.options.pixelRatio;
-
-      mouseConstraint = MouseConstraint.create(engine, {
-        mouse,
-        constraint: { stiffness: 0.00001, damping: 0.9, render: { visible:false } }
-      });
-      World.add(world, mouseConstraint);
-      render.mouse = mouse;
-
       buildLevel(IMGS);
       spawnBird(IMGS);
       setupSlingshot();
       setupCameraInitial();
-      bindGameplay(IMGS);
+      bindPointerControls(IMGS); // <-- вместо MouseConstraint
+      bindPhysics(IMGS);
 
       Render.run(render);
       Runner.run(runner, engine);
@@ -290,7 +283,6 @@
 
       Composite.clear(world, false);
       World.add(world, ground);
-      World.add(world, mouseConstraint);
 
       stats.score = 0; stats.broken = 0; stats.hits = 0; stats.wins = 0;
       updateHUD();
@@ -662,45 +654,45 @@
       Render.lookAt(render, { min: render.bounds.min, max: render.bounds.max });
     }
 
-    // запуск по натяжению
-    function launchBirdFromTension(){
-      if (!bird || !slingAnchor) return;
+    // ===== Координаты pointer -> world (с учётом камеры) =====
+    function pointerToWorld(e){
+      const rect = render.canvas.getBoundingClientRect();
+      const sx = (e.clientX - rect.left) / rect.width;
+      const sy = (e.clientY - rect.top) / rect.height;
 
-      const pull = Vector.sub(slingAnchor, bird.position);
-      const dist = Vector.magnitude(pull);
-      const d = Math.min(dist, SLING.pullMax);
-
-      if (d < 6) return;
-
-      const dir = Vector.normalise(pull);
-      const vel = Vector.mult(dir, d * SLING.launchK);
-
-      Body.setVelocity(bird, vel);
-      Body.setAngularVelocity(bird, 0);
-      bird.frictionAir = 0.010;
+      const wx = render.bounds.min.x + sx * (render.bounds.max.x - render.bounds.min.x);
+      const wy = render.bounds.min.y + sy * (render.bounds.max.y - render.bounds.min.y);
+      return { x: wx, y: wy };
     }
 
-    function bindGameplay(IMGS){
-      Events.on(mouseConstraint, "mousedown", ()=>{
+    function bindPointerControls(IMGS){
+      const canvas = render.canvas;
+
+      canvas.addEventListener("pointerdown", (e)=>{
         if (!bird || birdLaunched || !canLaunch) return;
-        const found = Query.point([bird], mouse.position);
-        if (found && found.length){
+
+        const p = pointerToWorld(e);
+        const dx = p.x - bird.position.x;
+        const dy = p.y - bird.position.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist <= SPR.birdRadius * 1.25){
+          canvas.setPointerCapture(e.pointerId);
           draggingBird = true;
-          $("status").textContent = "Тяни влево…";
+          $("status").textContent = "Тяни…";
         }
       });
 
-      Events.on(mouseConstraint, "mousemove", ()=>{
+      canvas.addEventListener("pointermove", (e)=>{
         if (!bird || !draggingBird || birdLaunched) return;
 
         const start = bird.__start;
-        const mp = mouse.position;
+        const p = pointerToWorld(e);
 
-        let dx = mp.x - start.x;
-        let dy = mp.y - start.y;
+        let dx = p.x - start.x;
+        let dy = p.y - start.y;
 
-        if (dx > 0) dx = 0;
-
+        // ✅ ВО ВСЕ СТОРОНЫ: никакого "if (dx>0) dx=0" — тянем куда угодно
         const dist = Math.hypot(dx, dy) || 1;
         const k = Math.min(1, SLING.pullMax / dist);
 
@@ -715,7 +707,7 @@
         camera.tzoom = 0.92 - tension * 0.10;
       });
 
-      Events.on(mouseConstraint, "mouseup", ()=>{
+      canvas.addEventListener("pointerup", (e)=>{
         if (!bird || !draggingBird || birdLaunched) { draggingBird = false; return; }
         draggingBird = false;
         if (!canLaunch) return;
@@ -723,9 +715,22 @@
         activateStructure();
         setBirdFly();
 
+        // стул появляется после броска
         spawnChairAfterLaunch(IMGS, bird.__start);
 
-        launchBirdFromTension();
+        // ==== РОГАТКА: полёт в противоположную сторону от натяжения ====
+        // pull = start - текущая позиция (если тянул вниз-влево => полетит вверх-вправо)
+        const pull = Vector.sub(bird.__start, bird.position);
+        const d = Math.min(Vector.magnitude(pull), SLING.pullMax);
+
+        if (d > 6){
+          const dir = Vector.normalise(pull);
+          const vel = Vector.mult(dir, d * SLING.launchK);
+          Body.setVelocity(bird, vel);
+          Body.setAngularVelocity(bird, 0);
+          bird.frictionAir = 0.010;
+        }
+
         detachSlingshot();
 
         birdLaunched = true;
@@ -739,8 +744,15 @@
         scheduleBirdRespawn(IMGS, AUTO_RESPAWN_MS);
       });
 
+      canvas.addEventListener("pointercancel", ()=>{
+        draggingBird = false;
+      });
+    }
+
+    function bindPhysics(IMGS){
       Events.on(engine, "collisionStart", (event)=>{
         if (!structure.activated) return;
+
         for (const pair of event.pairs){
           const a = pair.bodyA, b = pair.bodyB;
 
