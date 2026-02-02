@@ -184,7 +184,7 @@
       humanFly: "assets/player/human_fly.png",
       chair: "assets/player/chair.png",
 
-      // ✅ SUPER-скин = "человечек на стуле" (как ты сказал)
+      // ✅ SUPER-скин = "человечек на стуле"
       superSkin: "assets/player/human_idle.png"
     };
 
@@ -233,22 +233,21 @@
     // ✅ время жизни птицы
     const AUTO_RESPAWN_MS = 12000;
 
-    // ✅ Темнение фона (всегда)
-    const VISUAL = {
-      ambientDark: 0.18,      // постоянная темная подложка
-      vignette: 0.22,         // виньетка по краям
-      vignettePower: 0.95
+    // ✅ Затемнение ТОЛЬКО в SUPER (screen-space)
+    const SUPER_VISUAL = {
+      dimTarget: 0.55,     // насколько темно
+      vignette: 0.35       // виньетка
     };
 
     // ✅ Плавность полета
     const FLIGHT = {
-      airFrictionFlying: 0.0032,   // меньше сопротивление => плавнее
-      maxSpeed: 52,                // clamp скорости (убирает дерготню)
-      maxAngular: 0.18,            // clamp вращения
-      settleFrictionAir: 0.012     // после сильного замедления
+      airFrictionFlying: 0.0032,
+      maxSpeed: 52,
+      maxAngular: 0.18,
+      settleFrictionAir: 0.012
     };
 
-    // ✅ СДЕЛАЛ ЛОМАНИЕ АГРЕССИВНЫМ
+    // ✅ Ломание/урон
     const DMG = {
       energyScale: 0.95,
       minEnergy: 0.35,
@@ -305,7 +304,7 @@
       tx: 0, ty: 0,
       zoom: 1.0,
       tzoom: 1.0,
-      smoothing: 0.14  // чуть плавнее камера
+      smoothing: 0.14
     };
 
     function lerp(a,b,t){ return a + (b-a)*t; }
@@ -313,8 +312,8 @@
 
     // ✅ рогатка
     const SLING = {
-      pullMax: 420,      // круг натяжения больше
-      launchK: 0.165     // бросок сильнее
+      pullMax: 420,
+      launchK: 0.165
     };
 
     // UI супер
@@ -332,8 +331,9 @@
 
       if (superActive){
         superPulseT = 0;
-        superBannerFrames = 180;     // дольше и заметнее
-        superDim = Math.max(superDim, 0.26);
+        superBannerFrames = 180;
+        superDim = Math.max(superDim, SUPER_VISUAL.dimTarget);
+        superAuraPulse = 1.0;
 
         birdSwingBaseAngle = (bird && typeof bird.angle === "number") ? bird.angle : 0;
 
@@ -389,10 +389,8 @@
       engine = Engine.create();
       world = engine.world;
 
-      // ✅ чуть "мягче" гравитация => полет приятнее
       world.gravity.y = 0.98;
 
-      // ✅ чуть повышаем итерации (стабильнее физика, меньше дерготни)
       engine.positionIterations = 8;
       engine.velocityIterations = 7;
       engine.constraintIterations = 3;
@@ -430,14 +428,18 @@
       bindPointerControls(IMGS);
       bindPhysics(IMGS);
 
+      // ✅ FIX: Оверлеи рисуем в координатах экрана, а не мира (иначе камера/zoom режут затемнение)
       Events.on(render, "afterRender", ()=>{
-        // ✅ темное “киношное” тонирование (всегда)
-        drawAmbientDarkness();
+        const ctx = render.context;
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
 
         if (chairDecal) drawChairDecal(IMGS);
 
-        // SUPER overlays + огромный текст
+        // ✅ затемнение/текст только в SUPER и строго на весь экран
         drawSuperOverlay();
+
+        ctx.restore();
       });
 
       Render.run(render);
@@ -910,7 +912,6 @@
           const dir = Vector.normalise(pull);
           const vel = Vector.mult(dir, d * SLING.launchK);
 
-          // ✅ плавнее запуск: сброс и установка скорости + снижение air friction
           Body.setVelocity(bird, { x: 0, y: 0 });
           Body.setAngularVelocity(bird, 0);
           Body.setVelocity(bird, vel);
@@ -1014,7 +1015,6 @@
       Events.on(engine, "beforeUpdate", ()=>{
         const baseY = window.innerHeight - LEVEL.floorHeight;
 
-        // cleanup debris
         for (let i = debris.length - 1; i >= 0; i--){
           const d = debris[i];
           const body = d.body;
@@ -1029,7 +1029,6 @@
           }
         }
 
-        // ✅ полет плавнее: clamp скорости/вращения, чтобы не дергало
         if (bird && birdLaunched){
           const v = bird.velocity;
           const speed = Math.hypot(v.x, v.y);
@@ -1043,29 +1042,26 @@
             Body.setAngularVelocity(bird, Math.sign(av) * FLIGHT.maxAngular);
           }
 
-          // если почти остановился — возвращаем обычный air friction
           if (speed < 1.1){
             bird.frictionAir = lerp(bird.frictionAir, FLIGHT.settleFrictionAir, 0.06);
           }
         }
 
-        // shake decay
         if (shakeTime > 0){
           shakeTime -= 1;
           shakeMag = lerp(shakeMag, 0, 0.22);
         }
 
-        // overlay fade/pulse
+        // ✅ superDim только для SUPER, иначе уводим к 0
         if (superActive){
-          superDim = lerp(superDim, 0.26, 0.08);
+          superDim = lerp(superDim, SUPER_VISUAL.dimTarget, 0.10);
           superAuraPulse = lerp(superAuraPulse, 1.0, 0.10);
         } else {
-          superDim = lerp(superDim, 0.0, 0.08);
+          superDim = lerp(superDim, 0.0, 0.12);
           superAuraPulse = lerp(superAuraPulse, 0.0, 0.12);
         }
         if (superBannerFrames > 0) superBannerFrames -= 1;
 
-        // SUPER: скин + качание + аура-урон
         if (superActive && bird && birdLaunched){
           superPulseT += 1;
 
@@ -1103,16 +1099,13 @@
           }
         }
 
-        // freeze camera during drag
         if (draggingBird && !birdLaunched){
           camera.tx = camera.cx; camera.ty = camera.cy; camera.tzoom = camera.zoom;
           applyCamera(false);
           return;
         }
 
-        // camera follow
         if (bird && birdLaunched){
-          // чуть больше "look-ahead" вперед
           camera.tx = bird.position.x + 280;
           camera.ty = bird.position.y - 140;
           camera.tzoom = 1.10;
@@ -1149,93 +1142,81 @@
       const p = worldToScreen(chairDecal.x, chairDecal.y);
 
       const vw = (b.max.x - b.min.x);
-      const vh = (b.max.y - b.min.y);
-
       const sw = chairDecal.w / vw * render.canvas.width;
-      const sh = chairDecal.h / vh * render.canvas.height;
+      const sh = chairDecal.h / (b.max.y - b.min.y) * render.canvas.height;
 
       ctx.save();
       ctx.drawImage(img, p.x - sw/2, p.y - sh/2, sw, sh);
       ctx.restore();
     }
 
-    // ✅ постоянное темнение + виньетка (фон темный и “дорогой”)
-    function drawAmbientDarkness(){
-      const ctx = render.context;
-      const W = render.canvas.width;
-      const H = render.canvas.height;
-
-      ctx.save();
-      ctx.globalAlpha = clamp(VISUAL.ambientDark, 0, 0.45);
-      ctx.fillStyle = "rgba(0,0,0,1)";
-      ctx.fillRect(0,0,W,H);
-      ctx.restore();
-
-      ctx.save();
-      ctx.globalAlpha = clamp(VISUAL.vignette, 0, 0.55);
-      const grd = ctx.createRadialGradient(W*0.5, H*0.52, Math.min(W,H)*0.18, W*0.5, H*0.52, Math.min(W,H)*0.72);
-      grd.addColorStop(0, "rgba(0,0,0,0)");
-      grd.addColorStop(1, "rgba(0,0,0,1)");
-      ctx.fillStyle = grd;
-      ctx.fillRect(0,0,W,H);
-      ctx.restore();
-    }
-
+    // ✅ Затемнение / текст — ТОЛЬКО в SUPER и 100% на весь экран
     function drawSuperOverlay(){
+      if (!superActive && superDim <= 0.004 && superBannerFrames <= 0) return;
+
       const ctx = render.context;
       const W = render.canvas.width;
       const H = render.canvas.height;
 
-      // SUPER dim доп. (поверх общего темнения)
+      // 1) Fullscreen dim (screen-space)
       if (superDim > 0.004){
         ctx.save();
-        ctx.globalAlpha = clamp(superDim, 0, 0.45);
+        ctx.globalAlpha = clamp(superDim, 0, 0.75);
         ctx.fillStyle = "rgba(0,0,0,1)";
         ctx.fillRect(0,0,W,H);
+        ctx.restore();
 
+        // Виньетка поверх
+        ctx.save();
+        ctx.globalAlpha = clamp(SUPER_VISUAL.vignette * superDim, 0, 0.55);
+        const grdV = ctx.createRadialGradient(W*0.5, H*0.52, Math.min(W,H)*0.18, W*0.5, H*0.52, Math.min(W,H)*0.78);
+        grdV.addColorStop(0, "rgba(0,0,0,0)");
+        grdV.addColorStop(1, "rgba(0,0,0,1)");
+        ctx.fillStyle = grdV;
+        ctx.fillRect(0,0,W,H);
+        ctx.restore();
+
+        // Лёгкий золотой импульс
         const pulse = 0.16 + Math.sin((superPulseT||0)*0.10)*0.07;
-        ctx.globalAlpha = clamp(superAuraPulse * pulse, 0, 0.28);
-        const grd = ctx.createRadialGradient(W*0.5, H*0.50, 30, W*0.5, H*0.50, Math.min(W,H)*0.62);
-        grd.addColorStop(0, "rgba(255,210,70,0.65)");
+        ctx.save();
+        ctx.globalAlpha = clamp(superAuraPulse * pulse, 0, 0.30);
+        const grd = ctx.createRadialGradient(W*0.5, H*0.50, 40, W*0.5, H*0.50, Math.min(W,H)*0.62);
+        grd.addColorStop(0, "rgba(255,210,70,0.70)");
         grd.addColorStop(1, "rgba(255,210,70,0.0)");
         ctx.fillStyle = grd;
         ctx.fillRect(0,0,W,H);
         ctx.restore();
       }
 
-      // ✅ ОГРОМНАЯ надпись на весь экран/мир (по сути — на весь viewport игры)
+      // 2) Текст “Раскачаемся!!!” — большой и на весь экран
       if (superBannerFrames > 0){
         const t = superBannerFrames / 180;
-        const alpha = clamp(0.12 + t, 0, 1);
+        const alpha = clamp(0.10 + t, 0, 1);
 
         ctx.save();
         ctx.globalAlpha = alpha;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
 
-        // большой “слой-подложка” по центру
-        const big = Math.max(92, Math.min(150, Math.floor(W * 0.11)));
+        const big = Math.max(120, Math.min(210, Math.floor(W * 0.13)));
         ctx.font = `900 ${big}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial`;
 
-        // stroke жирный
-        ctx.lineWidth = 14;
-        ctx.strokeStyle = "rgba(0,0,0,0.62)";
-        ctx.strokeText("Раскачаемся!!!", W*0.50, H*0.18);
+        ctx.lineWidth = 16;
+        ctx.strokeStyle = "rgba(0,0,0,0.68)";
+        ctx.strokeText("Раскачаемся!!!", W*0.50, H*0.22);
 
-        // glow
         ctx.shadowColor = "rgba(255,210,70,0.98)";
-        ctx.shadowBlur = 28;
+        ctx.shadowBlur = 34;
 
         ctx.fillStyle = "rgba(255,235,170,0.98)";
-        ctx.fillText("Раскачаемся!!!", W*0.50, H*0.18);
+        ctx.fillText("Раскачаемся!!!", W*0.50, H*0.22);
 
-        // второй, полупрозрачный “водяной знак” по центру мира (очень большой)
         ctx.shadowBlur = 0;
-        ctx.globalAlpha = alpha * 0.18;
-        const huge = Math.max(140, Math.min(260, Math.floor(W * 0.18)));
+        ctx.globalAlpha = alpha * 0.16;
+        const huge = Math.max(180, Math.min(320, Math.floor(W * 0.20)));
         ctx.font = `900 ${huge}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial`;
         ctx.fillStyle = "rgba(255,210,70,0.85)";
-        ctx.fillText("Раскачаемся!!!", W*0.50, H*0.52);
+        ctx.fillText("Раскачаемся!!!", W*0.50, H*0.54);
 
         ctx.restore();
       }
