@@ -304,7 +304,6 @@
     }
     startBtn.addEventListener("click", hideMenu);
 
-    // ✅ ВАЖНО: путь к полу
     const ASSETS = {
       bg: "assets/bg_office.png",
       ground: "assets/ground/ground.png",
@@ -318,24 +317,12 @@
       superSkin: "assets/player/human_idle.png"
     };
 
-    // ✅ Пол — настройки рисования
     const GROUND_VIS = {
-      // сколько "мировых" единиц занимает земля по высоте
       hWorld: 220,
       overlap: 2,
-
-      // затемнение (чтоб в сцену влезало аккуратно)
       shadeAlpha: 0.10,
-
-      // авто-кроп по яркости: найдёт полоску земли внутри 1024px высоты
-      // если захотишь отключить — поставь false и будет рисовать всю картинку
       autoCrop: true,
-
-      // минимальная "яркость" строки, чтобы считать её частью земли
-      // (у твоей текстуры полоса земли яркая, фон почти чёрный)
       cropThreshold: 18,
-
-      // запас сверху/снизу, чтобы не обрезать края
       cropPadding: 6
     };
 
@@ -549,9 +536,7 @@
       }
     }
 
-    // ✅ авто-настройка "кропа" пола (ищем яркую полосу)
     function prepareGroundCrop(img){
-      // по умолчанию: вся картинка
       img.__cropY = 0;
       img.__cropH = img.height;
 
@@ -568,7 +553,6 @@
       const thr = GROUND_VIS.cropThreshold;
       const rowMean = new Float32Array(img.height);
 
-      // считаем среднюю яркость по строкам (чёрный фон даст ~0, земля даст 20+)
       for (let y=0; y<img.height; y++){
         let sum = 0;
         let count = 0;
@@ -592,7 +576,6 @@
       }
 
       if (top === -1 || bottom === -1 || bottom - top < 30){
-        // не нашли уверенно — оставляем как есть
         return;
       }
 
@@ -624,7 +607,6 @@
     function start(IMGS){
       $("status").textContent = "Запуск…";
 
-      // ✅ готовим кроп для твоей текстуры пола
       prepareGroundCrop(IMGS.imgGround);
 
       const canvas = $("c");
@@ -648,7 +630,7 @@
           width: window.innerWidth,
           height: window.innerHeight,
           wireframes: false,
-          background: ASSETS.bg,
+          background: "transparent",
           pixelRatio: dpr(),
           hasBounds: true
         }
@@ -666,19 +648,16 @@
       bindInput(IMGS);
       bindPhysics(IMGS);
 
-      // ✅ рисуем пол в beforeRender (под объектами)
-      Events.on(render, "beforeRender", ()=>{
-        const ctx = render.context;
-        ctx.save();
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        drawGround(IMGS);
-        ctx.restore();
-      });
-
       Events.on(render, "afterRender", ()=>{
         const ctx = render.context;
         ctx.save();
         ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+        // ✅ draw background + ground BEHIND bodies
+        ctx.globalCompositeOperation = "destination-over";
+        ctx.drawImage(IMGS.imgBg, 0, 0, render.canvas.width, render.canvas.height);
+        drawGround(IMGS);
+        ctx.globalCompositeOperation = "source-over";
 
         if (AIM.enabled) drawAimTrajectory();
         if (chairDecal) drawChairDecal(IMGS);
@@ -738,7 +717,6 @@
 
       Composite.clear(world, false);
 
-      // ✅ на reset заново готовим кроп (на случай если поменял PNG)
       prepareGroundCrop(IMGS.imgGround);
 
       ground = createGround();
@@ -1232,7 +1210,6 @@
       }
     }
 
-    // ===== WORLD->SCREEN =====
     function worldToScreen(x, y){
       const b = render.bounds;
       return {
@@ -1250,7 +1227,6 @@
       };
     }
 
-    // ✅ Рисование пола: тайлим по X и берём только "полосу" img.__cropY..img.__cropY+__cropH
     function drawGround(IMGS){
       if (!IMGS || !IMGS.imgGround) return;
 
@@ -1264,7 +1240,6 @@
       const srcY = img.__cropY ?? 0;
       const srcH = img.__cropH ?? img.height;
 
-      // масштаб считаем по высоте КРОПНУТОЙ полосы
       const scale = hWorld / srcH;
       const tileWWorld = img.width * scale;
 
@@ -1302,8 +1277,6 @@
 
       ctx.restore();
     }
-
-    // ====== Ниже оставлено как было (супер/траектория/физика и т.д.) ======
 
     function drawAimTrajectory(){
       if (!bird || birdLaunched || !draggingBird || !canLaunch) return;
@@ -1443,7 +1416,6 @@
       }
     }
 
-    // ======== PHYSICS LOOP (как было, укоротил только комментариями) ========
     function impactEnergy(bodyA, bodyB){
       const rv = Vector.sub(bodyA.velocity, bodyB.velocity);
       const rel = Vector.magnitude(rv);
