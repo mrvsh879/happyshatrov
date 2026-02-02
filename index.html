@@ -40,7 +40,7 @@
     <div class="panel">
       <h1>Office Birds — Camera/Zoom</h1>
       <small><b>Управление:</b> зажми человечка → тяни <b>влево</b> → отпусти (полетит <b>вправо</b>).</small>
-      <small>Сила = натяжение. После выстрела на месте остаётся <b>стул</b>.</small>
+      <small>Сила = натяжение. <b>Стул появляется только после броска</b>.</small>
       <div class="kv">
         <div>Счёт:</div><div id="score">0</div>
         <div>Сломано:</div><div id="broken">0</div>
@@ -104,7 +104,7 @@
 
     const {
       Engine, Render, Runner, World, Bodies, Body,
-      Constraint, Mouse, MouseConstraint, Events, Composite, Query, Vector, Bounds
+      Constraint, Mouse, MouseConstraint, Events, Composite, Query, Vector
     } = Matter;
 
     let engine, world, render, runner, ground;
@@ -119,7 +119,7 @@
     let draggingBird = false;
     let canLaunch = true;
 
-    let chairOnStart = null; // пустой стул, который остаётся после выстрела
+    let chairAfterLaunch = null; // стул появляется ТОЛЬКО после броска
     let DEBUG = false;
 
     const structure = {
@@ -131,30 +131,26 @@
 
     const stats = { score:0, broken:0, hits:0, wins:0 };
 
-    // Пороговые значения
     const MANAGER_HIT_SPEED = 4.0;
     const BEAM_SPLIT_IMPACT = 6.6;
     const AUTO_RESPAWN_MS = 2700;
 
-    // ====== НАСТРОЙКИ РАЗМЕРОВ (СДЕЛАЛ БОЛЬШЕ) ======
+    // размеры (увеличены)
     const SPR = {
-      pillarH: 310,       // было ~260
-      beamW: 420,         // было ~340
-      birdRadius: 56,     // было ~42
-      birdWIdle: 165,     // было ~120
-      birdWFly: 135,      // было ~92
-      managerW: 86,       // было ~74
-      chairW: 120         // под png стула
+      pillarH: 310,
+      beamW: 420,
+      birdRadius: 56,
+      birdWIdle: 165,
+      birdWFly: 135,
+      managerW: 86,
+      chairW: 120
     };
 
-    // ====== ЛЕВЕЛ (СДЕЛАЛ ДОМОВ БОЛЬШЕ) ======
+    // несколько домиков
     const LEVEL = {
       floorHeight: 95,
-
       birdStartX: 210,
       birdStartYOffset: 190,
-
-      // 2-3 домика в ряд, чуть “по-ангри”
       houses: [
         { x: 0.56, w: 420, managers: 3 },
         { x: 0.72, w: 420, managers: 3 },
@@ -162,13 +158,12 @@
       ]
     };
 
-    // ====== КАМЕРА / ЗУМ ======
+    // камера/зум
     const camera = {
       cx: 0, cy: 0,
       tx: 0, ty: 0,
       zoom: 1.0,
       tzoom: 1.0,
-      // ограничение области (world-bounds)
       worldMinX: -200,
       worldMaxX: 4200,
       worldMinY: -800,
@@ -224,14 +219,12 @@
           wireframes: false,
           background: ASSETS.bg,
           pixelRatio: window.devicePixelRatio || 1,
-          // ВКЛЮЧАЕМ BOUNDS ДЛЯ КАМЕРЫ
           hasBounds: true
         }
       });
 
       runner = Runner.create();
 
-      // Пол
       ground = Bodies.rectangle(
         2000,
         window.innerHeight - LEVEL.floorHeight/2,
@@ -246,7 +239,6 @@
       );
       World.add(world, ground);
 
-      // Мышь
       mouse = Mouse.create(canvas);
       mouse.pixelRatio = render.options.pixelRatio;
 
@@ -259,7 +251,7 @@
 
       buildLevel(IMGS);
       spawnBird(IMGS);
-      setupSlingshot(IMGS);
+      setupSlingshot();
       setupCameraInitial();
       bindGameplay(IMGS);
 
@@ -305,7 +297,12 @@
       bird = null;
       slingshot = null;
       slingAnchor = null;
-      chairOnStart = null;
+
+      // убрать стул (если был после прошлого броска)
+      if (chairAfterLaunch){
+        World.remove(world, chairAfterLaunch);
+        chairAfterLaunch = null;
+      }
 
       birdLaunched = false;
       draggingBird = false;
@@ -313,17 +310,15 @@
 
       buildLevel(IMGS);
       spawnBird(IMGS);
-      setupSlingshot(IMGS);
+      setupSlingshot();
       setupCameraInitial();
 
       $("status").textContent = "Готово";
     }
 
-    // ====== LEVEL: несколько домиков ======
     function buildLevel(IMGS){
       const baseY = window.innerHeight - LEVEL.floorHeight;
 
-      // чистим массивы
       structure.pillars = [];
       structure.beams = [];
       structure.managers = [];
@@ -384,7 +379,6 @@
         const bMid = makeBeam(cx, yMid);
         const bBot = makeBeam(cx, yBot);
 
-        // менеджеры
         const mScale = SPR.managerW / IMGS.imgManager.width;
         const mW = IMGS.imgManager.width * mScale;
         const mH = IMGS.imgManager.height * mScale;
@@ -471,26 +465,11 @@
       bird.render.sprite.yScale = bird.__idleScale;
     }
 
-    function setupSlingshot(IMGS){
+    // ВАЖНО: здесь мы НЕ создаём стул. Стул создаётся только в момент броска (mouseup).
+    function setupSlingshot(){
       const start = bird.__start;
       slingAnchor = { x: start.x, y: start.y };
 
-      // стул, который остаётся после выстрела
-      const chairScale = SPR.chairW / IMGS.imgChair.width;
-      const chairW = IMGS.imgChair.width * chairScale;
-      const chairH = IMGS.imgChair.height * chairScale;
-
-      chairOnStart = Bodies.rectangle(start.x, start.y + 64, chairW, chairH, {
-        isStatic: true,
-        render: DEBUG
-          ? { fillStyle:"rgba(150,150,150,0.18)", strokeStyle:"rgba(220,220,220,0.85)", lineWidth:2 }
-          : { sprite:{ texture: ASSETS.chair, xScale: chairScale, yScale: chairScale } }
-      });
-      chairOnStart.__isChair = true;
-
-      World.add(world, chairOnStart);
-
-      // резинка (constraint)
       slingshot = Constraint.create({
         pointA: { x: slingAnchor.x, y: slingAnchor.y },
         bodyB: bird,
@@ -511,6 +490,33 @@
       slingshot = null;
     }
 
+    function spawnChairAfterLaunch(IMGS, atPos){
+      // защита от "стул на стуле" если вдруг повторный вызов
+      if (chairAfterLaunch){
+        World.remove(world, chairAfterLaunch);
+        chairAfterLaunch = null;
+      }
+
+      const chairScale = SPR.chairW / IMGS.imgChair.width;
+      const chairW = IMGS.imgChair.width * chairScale;
+      const chairH = IMGS.imgChair.height * chairScale;
+
+      chairAfterLaunch = Bodies.rectangle(
+        atPos.x,
+        atPos.y + 64,
+        chairW,
+        chairH,
+        {
+          isStatic: true,
+          render: DEBUG
+            ? { fillStyle:"rgba(160,160,160,0.2)", strokeStyle:"rgba(220,220,220,0.85)", lineWidth:2 }
+            : { sprite:{ texture: ASSETS.chair, xScale: chairScale, yScale: chairScale } }
+        }
+      );
+      chairAfterLaunch.__isChair = true;
+      World.add(world, chairAfterLaunch);
+    }
+
     function scheduleBirdRespawn(IMGS, delayMs){
       if (birdRespawnTimer) return;
       birdRespawnTimer = setTimeout(()=>{
@@ -525,15 +531,14 @@
           slingshot = null;
         }
 
-        // стул остаётся (как ты просил) — но чтобы не было “стульев миллион”
-        // при респавне мы удаляем старый и ставим новый на старте
-        if (chairOnStart){
-          World.remove(world, chairOnStart);
-          chairOnStart = null;
+        // стул должен исчезать на респавне (как в Angry Birds: новый выстрел — новое "место старта")
+        if (chairAfterLaunch){
+          World.remove(world, chairAfterLaunch);
+          chairAfterLaunch = null;
         }
 
         spawnBird(IMGS);
-        setupSlingshot(IMGS);
+        setupSlingshot();
         setBirdIdle();
 
         birdLaunched = false;
@@ -544,7 +549,6 @@
       }, delayMs);
     }
 
-    // ====== Ломаем балки (раскол на 2 части) ======
     function splitBeam(beam){
       if (!beam || !beam.__isBeam || beam.__split) return;
       beam.__split = true;
@@ -610,19 +614,15 @@
       }
     }
 
-    // ====== КАМЕРА: начальный вид ======
     function setupCameraInitial(){
       const baseY = window.innerHeight - LEVEL.floorHeight;
       camera.cx = camera.tx = 900;
       camera.cy = camera.ty = baseY - 260;
-
-      // начальный зум — чтобы было видно и рогатку и домики
       camera.zoom = camera.tzoom = 0.88;
       applyCamera(true);
     }
 
     function applyCamera(force=false){
-      // плавность
       camera.cx = force ? camera.tx : lerp(camera.cx, camera.tx, camera.smoothing);
       camera.cy = force ? camera.ty : lerp(camera.cy, camera.ty, camera.smoothing);
       camera.zoom = force ? camera.tzoom : lerp(camera.zoom, camera.tzoom, camera.smoothing);
@@ -635,7 +635,6 @@
       let minY = camera.cy - vh/2;
       let maxY = camera.cy + vh/2;
 
-      // clamp по миру
       const wWorld = camera.worldMaxX - camera.worldMinX;
       const hWorld = camera.worldMaxY - camera.worldMinY;
 
@@ -658,12 +657,10 @@
       render.bounds.max.x = maxX;
       render.bounds.max.y = maxY;
 
-      // чтобы мышь работала корректно при hasBounds
       Render.lookAt(render, { min: render.bounds.min, max: render.bounds.max });
     }
 
     function bindGameplay(IMGS){
-      // Ограничение: тянуть можно только bird
       Events.on(mouseConstraint, "mousedown", ()=>{
         if (!bird || birdLaunched || !canLaunch) return;
 
@@ -677,15 +674,13 @@
       Events.on(mouseConstraint, "mousemove", ()=>{
         if (!bird || !draggingBird || birdLaunched) return;
 
-        // ====== ВАЖНО: ТЯНЕМ ВЛЕВО (ангри-бердс ощущение)
-        // Разрешаем движение влево и немного вверх/вниз, но НЕ вправо от якоря.
         const start = bird.__start;
         const mp = mouse.position;
 
         let dx = mp.x - start.x;
         let dy = mp.y - start.y;
 
-        // запрещаем увод вправо (dx > 0)
+        // запрещаем тянуть вправо (dx > 0)
         if (dx > 0) dx = 0;
 
         const pullMax = 220;
@@ -699,9 +694,8 @@
         Body.setVelocity(bird, { x: 0, y: 0 });
         Body.setAngularVelocity(bird, 0);
 
-        // небольшая подсказка зума во время натяжения
         const tension = Math.min(1, dist / pullMax);
-        camera.tzoom = 0.92 - tension * 0.10; // чем сильнее натянул, тем чуть шире обзор
+        camera.tzoom = 0.92 - tension * 0.10;
       });
 
       Events.on(mouseConstraint, "mouseup", ()=>{
@@ -709,12 +703,12 @@
         draggingBird = false;
         if (!canLaunch) return;
 
-        // Активируем домики
         activateStructure();
         setBirdFly();
 
-        // При выстреле: стул остаётся. (Он уже стоит, мы его просто НЕ трогаем.)
-        // Отцепляем резинку — Matter “выстрелит”.
+        // СТУЛ ПОЯВЛЯЕТСЯ ТОЛЬКО СЕЙЧАС (после броска)
+        spawnChairAfterLaunch(IMGS, bird.__start);
+
         detachSlingshot();
 
         birdLaunched = true;
@@ -724,13 +718,10 @@
         updateHUD();
         $("status").textContent = "Полетел!";
 
-        // камера на птицу
         camera.tzoom = 1.08;
-
         scheduleBirdRespawn(IMGS, AUTO_RESPAWN_MS);
       });
 
-      // Коллизии
       Events.on(engine, "collisionStart", (event)=>{
         if (!structure.activated) return;
 
@@ -741,7 +732,6 @@
           const vb = Math.hypot(b.velocity.x, b.velocity.y);
           const impact = Math.abs(va - vb);
 
-          // Менеджер выбит птицей
           if ((a.__isManager && b===bird) || (b.__isManager && a===bird)){
             const m = a.__isManager ? a : b;
             const v = bird ? Math.hypot(bird.velocity.x, bird.velocity.y) : 0;
@@ -756,7 +746,6 @@
             }
           }
 
-          // Раскол балки
           if (impact > BEAM_SPLIT_IMPACT){
             if (a.__isBeam) splitBeam(a);
             if (b.__isBeam) splitBeam(b);
@@ -764,13 +753,10 @@
         }
       });
 
-      // Update loop
       Events.on(engine, "beforeUpdate", ()=>{
-        // камера
         const baseY = window.innerHeight - LEVEL.floorHeight;
 
         if (!bird){
-          // когда птицы нет (между респавнами)
           camera.tx = lerp(camera.tx, 900, 0.06);
           camera.ty = lerp(camera.ty, baseY - 260, 0.06);
           camera.tzoom = lerp(camera.tzoom, 0.90, 0.06);
@@ -779,12 +765,10 @@
         }
 
         if (birdLaunched){
-          // следим за птицей
-          camera.tx = bird.position.x + 240; // чуть вперёд по направлению
+          camera.tx = bird.position.x + 240;
           camera.ty = bird.position.y - 120;
           camera.tzoom = 1.10;
 
-          // вылет — ускоренный респавн
           const out =
             bird.position.x < -260 ||
             bird.position.x > camera.worldMaxX + 260 ||
@@ -793,14 +777,12 @@
 
           if (out) scheduleBirdRespawn(IMGS, 220);
 
-          // если почти остановилась — вернуть вид чуть шире
           const speed = Math.hypot(bird.velocity.x, bird.velocity.y);
           if (speed < 0.35 && bird.position.y > baseY - 260){
             setBirdIdle();
             camera.tzoom = 0.98;
           }
         } else {
-          // до выстрела — обзор на рогатку + домики
           camera.tx = 900;
           camera.ty = baseY - 260;
           camera.tzoom = 0.88;
