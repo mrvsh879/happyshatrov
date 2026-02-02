@@ -59,7 +59,7 @@
     <div class="panel">
       <h1>Цель</h1>
       <small>Выбей всех менеджеров 🏆</small>
-      <small>Камера плавно следит за полетом, потом возвращается.</small>
+      <small>Камера следит за полетом, но <b>не дергается во время натяжения</b>.</small>
       <div class="kv">
         <div>Статус:</div><div id="status">Загрузка…</div>
       </div>
@@ -119,6 +119,9 @@
     let draggingBird = false;
     let canLaunch = true;
 
+    // ✅ ФИКС "слетает в центр": во время натяжения замораживаем bounds
+    let dragView = null;
+
     let chairAfterLaunch = null;
     let DEBUG = false;
 
@@ -135,7 +138,6 @@
     const BEAM_SPLIT_IMPACT = 6.6;
     const AUTO_RESPAWN_MS = 2700;
 
-    // размеры (увеличены)
     const SPR = {
       pillarH: 310,
       beamW: 420,
@@ -146,7 +148,6 @@
       chairW: 120
     };
 
-    // несколько домиков
     const LEVEL = {
       floorHeight: 95,
       birdStartX: 210,
@@ -158,7 +159,6 @@
       ]
     };
 
-    // камера/зум
     const camera = {
       cx: 0, cy: 0,
       tx: 0, ty: 0,
@@ -174,12 +174,10 @@
     function lerp(a,b,t){ return a + (b-a)*t; }
     function clamp(v,min,max){ return Math.max(min, Math.min(max,v)); }
 
-    // ====== НАСТРОЙКИ НАТЯЖЕНИЯ / СИЛЫ ======
-    // pullMax = радиус "круга натяжения"
-    // launchK = сила броска (скорость)
+    // Настройка круга натяжения и силы броска
     const SLING = {
-      pullMax: 360,   // сделай 260..460
-      launchK: 0.125  // сделай 0.08..0.16
+      pullMax: 360,   // радиус натяжения (260..460)
+      launchK: 0.125  // сила (0.08..0.16)
     };
 
     $("status").textContent = "Загрузка ассетов…";
@@ -251,7 +249,7 @@
       spawnBird(IMGS);
       setupSlingshot();
       setupCameraInitial();
-      bindPointerControls(IMGS); // <-- вместо MouseConstraint
+      bindPointerControls(IMGS);
       bindPhysics(IMGS);
 
       Render.run(render);
@@ -296,14 +294,15 @@
       slingshot = null;
       slingAnchor = null;
 
+      draggingBird = false;
+      canLaunch = true;
+      birdLaunched = false;
+      dragView = null;
+
       if (chairAfterLaunch){
         World.remove(world, chairAfterLaunch);
         chairAfterLaunch = null;
       }
-
-      birdLaunched = false;
-      draggingBird = false;
-      canLaunch = true;
 
       buildLevel(IMGS);
       spawnBird(IMGS);
@@ -538,6 +537,7 @@
         birdLaunched = false;
         draggingBird = false;
         canLaunch = true;
+        dragView = null;
 
         $("status").textContent = "Готово";
       }, delayMs);
@@ -654,14 +654,16 @@
       Render.lookAt(render, { min: render.bounds.min, max: render.bounds.max });
     }
 
-    // ===== Координаты pointer -> world (с учётом камеры) =====
+    // ✅ Pointer -> world с учетом "замороженных bounds" во время drag
     function pointerToWorld(e){
       const rect = render.canvas.getBoundingClientRect();
       const sx = (e.clientX - rect.left) / rect.width;
       const sy = (e.clientY - rect.top) / rect.height;
 
-      const wx = render.bounds.min.x + sx * (render.bounds.max.x - render.bounds.min.x);
-      const wy = render.bounds.min.y + sy * (render.bounds.max.y - render.bounds.min.y);
+      const b = (draggingBird && dragView) ? dragView : render.bounds;
+
+      const wx = b.min.x + sx * (b.max.x - b.min.x);
+      const wy = b.min.y + sy * (b.max.y - b.min.y);
       return { x: wx, y: wy };
     }
 
@@ -679,6 +681,13 @@
         if (dist <= SPR.birdRadius * 1.25){
           canvas.setPointerCapture(e.pointerId);
           draggingBird = true;
+
+          // ✅ замораживаем bounds на момент начала натяжения
+          dragView = {
+            min: { x: render.bounds.min.x, y: render.bounds.min.y },
+            max: { x: render.bounds.max.x, y: render.bounds.max.y }
+          };
+
           $("status").textContent = "Тяни…";
         }
       });
@@ -692,7 +701,6 @@
         let dx = p.x - start.x;
         let dy = p.y - start.y;
 
-        // ✅ ВО ВСЕ СТОРОНЫ: никакого "if (dx>0) dx=0" — тянем куда угодно
         const dist = Math.hypot(dx, dy) || 1;
         const k = Math.min(1, SLING.pullMax / dist);
 
@@ -703,23 +711,21 @@
         Body.setVelocity(bird, { x: 0, y: 0 });
         Body.setAngularVelocity(bird, 0);
 
-        const tension = Math.min(1, dist / SLING.pullMax);
-        camera.tzoom = 0.92 - tension * 0.10;
+        // ❌ ВАЖНО: НЕ трогаем camera.tzoom во время drag (это и вызывало "слет в центр")
       });
 
-      canvas.addEventListener("pointerup", (e)=>{
-        if (!bird || !draggingBird || birdLaunched) { draggingBird = false; return; }
+      canvas.addEventListener("pointerup", ()=>{
+        if (!bird || !draggingBird || birdLaunched) { draggingBird = false; dragView = null; return; }
         draggingBird = false;
+        dragView = null; // ✅ разморозили bounds
         if (!canLaunch) return;
 
         activateStructure();
         setBirdFly();
 
-        // стул появляется после броска
         spawnChairAfterLaunch(IMGS, bird.__start);
 
-        // ==== РОГАТКА: полёт в противоположную сторону от натяжения ====
-        // pull = start - текущая позиция (если тянул вниз-влево => полетит вверх-вправо)
+        // РОГАТКА: летит в противоположную сторону от натяжения
         const pull = Vector.sub(bird.__start, bird.position);
         const d = Math.min(Vector.magnitude(pull), SLING.pullMax);
 
@@ -746,6 +752,7 @@
 
       canvas.addEventListener("pointercancel", ()=>{
         draggingBird = false;
+        dragView = null;
       });
     }
 
@@ -783,6 +790,15 @@
 
       Events.on(engine, "beforeUpdate", ()=>{
         const baseY = window.innerHeight - LEVEL.floorHeight;
+
+        // ✅ ФИКС: пока тянем — камера полностью "заморожена" (не меняет bounds)
+        if (draggingBird && !birdLaunched){
+          camera.tx = camera.cx;
+          camera.ty = camera.cy;
+          camera.tzoom = camera.zoom;
+          applyCamera(false);
+          return;
+        }
 
         if (!bird){
           camera.tx = lerp(camera.tx, 900, 0.06);
