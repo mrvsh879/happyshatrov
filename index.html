@@ -40,7 +40,7 @@
     <div class="panel">
       <h1>Office Birds — Camera/Zoom</h1>
       <small><b>Управление:</b> зажми человечка → тяни в любую сторону → отпусти (полетит в противоположную).</small>
-      <small>Сила = натяжение. <b>Стул появляется только после броска</b>.</small>
+      <small>Сила = натяжение. <b>Стул появляется только после броска</b> (и не мешает физике).</small>
       <div class="kv">
         <div>Счёт:</div><div id="score">0</div>
         <div>Сломано:</div><div id="broken">0</div>
@@ -59,7 +59,7 @@
     <div class="panel">
       <h1>Цель</h1>
       <small>Выбей всех менеджеров 🏆</small>
-      <small>Камера следит за полетом, но <b>не дергается во время натяжения</b>.</small>
+      <small>Камера следит за полётом, но <b>не двигается во время натяжения</b>.</small>
       <div class="kv">
         <div>Статус:</div><div id="status">Загрузка…</div>
       </div>
@@ -119,7 +119,7 @@
     let draggingBird = false;
     let canLaunch = true;
 
-    // ✅ bounds freeze during drag
+    // bounds freeze during drag (фикс "слетает в центр")
     let dragView = null;
 
     let chairAfterLaunch = null;
@@ -128,8 +128,9 @@
     const structure = { pillars: [], beams: [], managers: [], activated: false };
     const stats = { score:0, broken:0, hits:0, wins:0 };
 
-    const MANAGER_HIT_SPEED = 4.0;
-    const BEAM_SPLIT_IMPACT = 6.6;
+    // ✅ УРОН УВЕЛИЧЕН
+    const MANAGER_HIT_SPEED = 2.7;   // было 4.0
+    const BEAM_SPLIT_IMPACT = 4.8;   // было 6.6
     const AUTO_RESPAWN_MS = 2700;
 
     const SPR = {
@@ -168,7 +169,7 @@
     function lerp(a,b,t){ return a + (b-a)*t; }
     function clamp(v,min,max){ return Math.max(min, Math.min(max,v)); }
 
-    // Настройка круга натяжения и силы
+    // круг натяжения и сила
     const SLING = {
       pullMax: 360,
       launchK: 0.125
@@ -501,6 +502,12 @@
             : { sprite:{ texture: ASSETS.chair, xScale: chairScale, yScale: chairScale } }
         }
       );
+
+      // ✅ СТУЛ ТОЛЬКО ДЕКОР: никогда не мешает выстрелу/полёту
+      chairAfterLaunch.isSensor = true;
+      chairAfterLaunch.collisionFilter.mask = 0;   // ни с чем не сталкивается
+      chairAfterLaunch.collisionFilter.group = -1;
+
       chairAfterLaunch.__isChair = true;
       World.add(world, chairAfterLaunch);
     }
@@ -537,10 +544,56 @@
       }, delayMs);
     }
 
+    // Полноценное ломание балки на 2 части
     function splitBeam(beam){
       if (!beam || !beam.__isBeam || beam.__split) return;
       beam.__split = true;
-      // (оставлено как было раньше — не трогаю)
+
+      const pos = beam.position;
+      const angle = beam.angle;
+      const w = beam.bounds.max.x - beam.bounds.min.x;
+      const h = beam.bounds.max.y - beam.bounds.min.y;
+
+      const gap = 12;
+      const w2 = Math.max(72, (w - gap) / 2);
+
+      const dir = Vector.rotate({ x: 1, y: 0 }, angle);
+      const off = Vector.mult(dir, (w2/2 + gap/2));
+
+      const leftPos  = Vector.sub(pos, off);
+      const rightPos = Vector.add(pos, off);
+
+      function makePiece(p){
+        const piece = Bodies.rectangle(p.x, p.y, w2, h, {
+          isStatic: false,
+          friction: 0.95,
+          restitution: 0.02,
+          density: 0.0022,
+          chamfer: { radius: 4 },
+          render: DEBUG
+            ? { fillStyle:"rgba(255,120,0,0.25)", strokeStyle:"rgba(255,170,90,0.95)", lineWidth:2 }
+            : { sprite:{ texture: ASSETS.beam, xScale: beam.__beamScale * (w2 / (SPR.beamW)), yScale: beam.__beamScale } }
+        });
+        piece.__isBeam = true;
+        piece.__split = true;
+        piece.__beamScale = beam.__beamScale;
+
+        Body.setAngle(piece, angle);
+        Body.setVelocity(piece, beam.velocity);
+        Body.setAngularVelocity(piece, beam.angularVelocity);
+        piece.frictionAir = beam.frictionAir || 0.010;
+        return piece;
+      }
+
+      const p1 = makePiece(leftPos);
+      const p2 = makePiece(rightPos);
+
+      World.remove(world, beam);
+      const idx = structure.beams.indexOf(beam);
+      if (idx >= 0) structure.beams.splice(idx, 1);
+      structure.beams.push(p1, p2);
+      World.add(world, [p1, p2]);
+
       stats.broken += 1;
       stats.score += 15;
       updateHUD();
@@ -603,6 +656,7 @@
       Render.lookAt(render, { min: render.bounds.min, max: render.bounds.max });
     }
 
+    // pointer -> world (во время drag по замороженным bounds)
     function pointerToWorld(e){
       const rect = render.canvas.getBoundingClientRect();
       const sx = (e.clientX - rect.left) / rect.width;
@@ -630,14 +684,12 @@
           canvas.setPointerCapture(e.pointerId);
           draggingBird = true;
 
-          // ✅ Freeze bounds
           dragView = {
             min: { x: render.bounds.min.x, y: render.bounds.min.y },
             max: { x: render.bounds.max.x, y: render.bounds.max.y }
           };
 
-          // ✅ ГЛАВНЫЙ ФИКС: делаем птицу static на время натяжения,
-          // чтобы constraint/физика НЕ тянули её назад в центр
+          // ✅ фикс: во время натяжения птица статична (ее не дергает пружина/физика)
           Body.setStatic(bird, true);
 
           $("status").textContent = "Тяни…";
@@ -662,8 +714,9 @@
         Body.setPosition(bird, { x: px, y: py });
         Body.setVelocity(bird, { x: 0, y: 0 });
         Body.setAngularVelocity(bird, 0);
+        bird.isSleeping = false;
 
-        // не трогаем camera.tzoom во время drag
+        // ❗не меняем камеру во время drag — иначе дергаются bounds
       });
 
       canvas.addEventListener("pointerup", ()=>{
@@ -674,25 +727,33 @@
 
         if (!canLaunch) return;
 
-        // ✅ снимаем static перед броском
-        Body.setStatic(bird, false);
-
         activateStructure();
         setBirdFly();
+
+        // Стул появляется после броска — и теперь он НЕ препятствие
         spawnChairAfterLaunch(IMGS, bird.__start);
 
+        // ✅ Сначала отцепляем "резинку", иначе она может гасить скорость
+        detachSlingshot();
+
+        // ✅ снимаем static перед броском
+        Body.setStatic(bird, false);
+        bird.isSleeping = false;
+
+        // РОГАТКА: летит в противоположную сторону от натяжения
         const pull = Vector.sub(bird.__start, bird.position);
         const d = Math.min(Vector.magnitude(pull), SLING.pullMax);
 
         if (d > 6){
           const dir = Vector.normalise(pull);
           const vel = Vector.mult(dir, d * SLING.launchK);
-          Body.setVelocity(bird, vel);
-          Body.setAngularVelocity(bird, 0);
-          bird.frictionAir = 0.010;
-        }
 
-        detachSlingshot();
+          Body.setVelocity(bird, { x: 0, y: 0 });
+          Body.setAngularVelocity(bird, 0);
+          Body.setVelocity(bird, vel);
+
+          bird.frictionAir = 0.006;
+        }
 
         birdLaunched = true;
         canLaunch = false;
@@ -723,6 +784,7 @@
           const vb = Math.hypot(b.velocity.x, b.velocity.y);
           const impact = Math.abs(va - vb);
 
+          // Убийство менеджера (порог ниже)
           if ((a.__isManager && b===bird) || (b.__isManager && a===bird)){
             const m = a.__isManager ? a : b;
             const v = bird ? Math.hypot(bird.velocity.x, bird.velocity.y) : 0;
@@ -737,9 +799,36 @@
             }
           }
 
+          // Ломание балок (порог ниже)
           if (impact > BEAM_SPLIT_IMPACT){
             if (a.__isBeam) splitBeam(a);
             if (b.__isBeam) splitBeam(b);
+          }
+
+          // ✅ Доп. урон от птицы: сильнее толкает объекты
+          if (bird && (a === bird || b === bird)){
+            const other = (a === bird) ? b : a;
+
+            // не трогаем землю/статичные и декор-стул
+            if (!other.isStatic && !other.__isChair){
+              const speed = Math.hypot(bird.velocity.x, bird.velocity.y);
+
+              if (speed > 1.8){
+                const dir = Vector.normalise(bird.velocity);
+                const dmg = Math.min(0.020, 0.006 + speed * 0.0025);
+
+                Body.applyForce(other, other.position, {
+                  x: dir.x * dmg,
+                  y: dir.y * dmg
+                });
+              }
+            }
+
+            // если прямой удар по балке на скорости — ломаем
+            if (other.__isBeam){
+              const speed = Math.hypot(bird.velocity.x, bird.velocity.y);
+              if (speed > 3.1) splitBeam(other);
+            }
           }
         }
       });
@@ -747,7 +836,7 @@
       Events.on(engine, "beforeUpdate", ()=>{
         const baseY = window.innerHeight - LEVEL.floorHeight;
 
-        // ✅ пока тянем — камера заморожена
+        // ✅ пока тянем — камера заморожена (не меняет bounds)
         if (draggingBird && !birdLaunched){
           camera.tx = camera.cx;
           camera.ty = camera.cy;
