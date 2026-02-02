@@ -313,6 +313,10 @@
     // ассеты
     const ASSETS = {
       bg: "assets/bg_office.png",
+
+      // ✅ NEW: ground texture (put it in repo: assets/ground/ground.png)
+      ground: "assets/ground/ground.png",
+
       beam: "assets/office/beam.png",
       pillar: "assets/office/pillar.png",
       manager: "assets/office/manager.png",
@@ -320,6 +324,16 @@
       humanFly: "assets/player/human_fly.png",
       chair: "assets/player/chair.png",
       superSkin: "assets/player/human_idle.png"
+    };
+
+    // ✅ VISUAL GROUND SETTINGS (tweak only these if you want)
+    const GROUND_VIS = {
+      // height of visible ground in WORLD units (not pixels)
+      hWorld: 300,
+      // small overlap into ground to avoid 1px gaps
+      overlap: 2,
+      // slight darkness overlay to blend with scene (0..0.6)
+      shadeAlpha: 0.10
     };
 
     const {
@@ -427,7 +441,7 @@
       ]
     };
 
-    // ✅ Camera + user zoom + pan (NEW)
+    // ✅ Camera + user zoom + pan
     const camera = {
       cx: 0, cy: 0,
       tx: 0, ty: 0,
@@ -438,10 +452,8 @@
       baseZoom: 0.86,
       userZoom: 1.0,
 
-      // ✅ pan offsets in WORLD units
       panX: 0,
       panY: 0,
-      // while user pans with 2 fingers we keep it locked for some frames
       panHoldFrames: 0
     };
 
@@ -529,6 +541,10 @@
 
     Promise.all([
       loadImage(ASSETS.bg),
+
+      // ✅ NEW: load ground texture
+      loadImage(ASSETS.ground),
+
       loadImage(ASSETS.beam),
       loadImage(ASSETS.pillar),
       loadImage(ASSETS.manager),
@@ -536,8 +552,8 @@
       loadImage(ASSETS.humanFly),
       loadImage(ASSETS.chair),
       loadImage(ASSETS.superSkin)
-    ]).then(([imgBg, imgBeam, imgPillar, imgManager, imgIdle, imgFly, imgChair, imgSuper])=>{
-      start({imgBg, imgBeam, imgPillar, imgManager, imgIdle, imgFly, imgChair, imgSuper});
+    ]).then(([imgBg, imgGround, imgBeam, imgPillar, imgManager, imgIdle, imgFly, imgChair, imgSuper])=>{
+      start({imgBg, imgGround, imgBeam, imgPillar, imgManager, imgIdle, imgFly, imgChair, imgSuper});
     }).catch((e)=>{
       console.error(e);
       $("status").textContent = "Ошибка PNG";
@@ -556,6 +572,25 @@
         canvas.width = w;
         canvas.height = h;
       }
+    }
+
+    // ✅ create/recreate ground on resize/reset (fixes stale ground position)
+    function createGround(){
+      const y = window.innerHeight - (LEVEL.floorHeight / 2);
+      const w = 9000;
+      const x = 2600;
+      const g = Bodies.rectangle(
+        x, y, w, LEVEL.floorHeight,
+        {
+          isStatic:true,
+          friction:1.0,
+          restitution:0.0,
+          render: DEBUG
+            ? { fillStyle:"rgba(255,255,255,0.10)" }
+            : { fillStyle:"rgba(0,0,0,0)" } // invisible physics floor, visual drawn separately
+        }
+      );
+      return g;
     }
 
     function start(IMGS){
@@ -590,14 +625,7 @@
 
       runner = Runner.create();
 
-      ground = Bodies.rectangle(
-        2600,
-        window.innerHeight - LEVEL.floorHeight/2,
-        9000,
-        LEVEL.floorHeight,
-        { isStatic:true, friction:1.0, restitution:0.0,
-          render: DEBUG ? { fillStyle:"rgba(255,255,255,0.10)" } : { fillStyle:"rgba(0,0,0,0)" } }
-      );
+      ground = createGround();
       World.add(world, ground);
 
       buildLevel(IMGS);
@@ -607,6 +635,16 @@
       bindInput(IMGS);
       bindPhysics(IMGS);
 
+      // ✅ draw ground BEFORE bodies (so it is under objects)
+      Events.on(render, "beforeRender", ()=>{
+        const ctx = render.context;
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        drawGround(IMGS);
+        ctx.restore();
+      });
+
+      // overlays AFTER bodies
       Events.on(render, "afterRender", ()=>{
         const ctx = render.context;
         ctx.save();
@@ -672,6 +710,9 @@
       if (birdRespawnTimer){ clearTimeout(birdRespawnTimer); birdRespawnTimer = null; }
 
       Composite.clear(world, false);
+
+      // ✅ recreate ground with new window size
+      ground = createGround();
       World.add(world, ground);
 
       stats.score = 0; stats.broken = 0; stats.hits = 0; stats.wins = 0;
@@ -994,7 +1035,6 @@
     let pinchStartDist = 0;
     let pinchStartZoom = 1.0;
 
-    // NEW for pan:
     let lastMid = null;
 
     function dist2(a,b){
@@ -1014,11 +1054,9 @@
 
       lastMid = midPoint(pts[0], pts[1]);
 
-      // stop slingshot drag if pinch begins
       draggingBird = false;
       dragView = null;
 
-      // hold pan (manual) for a bit
       camera.panHoldFrames = Math.max(camera.panHoldFrames, 60);
     }
 
@@ -1032,14 +1070,12 @@
         setUserZoom(pinchStartZoom * factor, false);
       }
 
-      // ✅ PAN: move by midpoint delta (screen -> world)
       const m = midPoint(pts[0], pts[1]);
       if (lastMid){
         const dx = (m.x - lastMid.x);
         const dy = (m.y - lastMid.y);
         lastMid = m;
 
-        // convert screen delta to world delta using current bounds
         const rect = render.canvas.getBoundingClientRect();
         const b = render.bounds;
         const vw = (b.max.x - b.min.x);
@@ -1048,12 +1084,9 @@
         const worldDX = (dx / rect.width)  * vw;
         const worldDY = (dy / rect.height) * vh;
 
-        // finger drag right should move camera right (scene left),
-        // so we subtract worldDX to "pull" the world
         camera.panX -= worldDX;
         camera.panY -= worldDY;
 
-        // clamp pan a bit (avoid losing the scene)
         camera.panX = clamp(camera.panX, -2200, 2200);
         camera.panY = clamp(camera.panY, -1200, 1200);
 
@@ -1065,7 +1098,6 @@
       if (pointers.size < 2){
         pinching = false;
         lastMid = null;
-        // keep pan for a bit after gesture, then decay
         camera.panHoldFrames = Math.max(camera.panHoldFrames, 45);
       }
     }
@@ -1181,7 +1213,7 @@
         return;
       }
 
-      // Mouse fallback (pan on desktop can be added later if you want)
+      // Mouse fallback
       let mouseDown = false;
       canvas.addEventListener("mousedown", (e)=>{
         mouseDown = true;
@@ -1220,7 +1252,7 @@
       }, {passive:false});
     }
 
-    // ======== TRAJECTORY (aim) ========
+    // ======== WORLD->SCREEN HELPERS ========
     function worldToScreen(x, y){
       const b = render.bounds;
       return {
@@ -1228,7 +1260,68 @@
         y: (y - b.min.y) / (b.max.y - b.min.y) * render.canvas.height
       };
     }
+    function worldSizeToScreen(w, h){
+      const b = render.bounds;
+      const vw = (b.max.x - b.min.x);
+      const vh = (b.max.y - b.min.y);
+      return {
+        w: (w / vw) * render.canvas.width,
+        h: (h / vh) * render.canvas.height
+      };
+    }
 
+    // ✅ NEW: draw tiled ground texture in WORLD coords (camera-safe)
+    function drawGround(IMGS){
+      if (!IMGS || !IMGS.imgGround) return;
+
+      const img = IMGS.imgGround;
+      const b = render.bounds;
+
+      const baseY = window.innerHeight - LEVEL.floorHeight; // world y where floor starts (top of physics ground)
+      const topY = baseY - GROUND_VIS.overlap;
+      const hWorld = GROUND_VIS.hWorld + GROUND_VIS.overlap;
+
+      // scale so that image height becomes hWorld in world units
+      const scale = hWorld / img.height;
+      const tileWWorld = img.width * scale;
+
+      // start tiling slightly before visible bounds
+      const xStart = Math.floor((b.min.x - tileWWorld) / tileWWorld) * tileWWorld;
+      const xEnd = b.max.x + tileWWorld;
+
+      const sTop = worldToScreen(xStart, topY);
+      const sizeOne = worldSizeToScreen(tileWWorld, hWorld);
+      const tileWpx = sizeOne.w;
+      const tileHpx = sizeOne.h;
+
+      // y in px: compute from topY to screen
+      const sY = worldToScreen(0, topY).y;
+
+      const ctx = render.context;
+      ctx.save();
+
+      // draw tiles
+      for (let x = xStart; x <= xEnd; x += tileWWorld){
+        const sX = worldToScreen(x, topY).x;
+        ctx.drawImage(img, sX, sY, tileWpx, tileHpx);
+      }
+
+      // subtle shade overlay to blend
+      if (GROUND_VIS.shadeAlpha > 0){
+        ctx.globalAlpha = GROUND_VIS.shadeAlpha;
+        ctx.fillStyle = "rgba(0,0,0,1)";
+        const left = worldToScreen(b.min.x, topY).x;
+        const right = worldToScreen(b.max.x, topY).x;
+        const width = (right - left);
+        const height = worldSizeToScreen(0, hWorld).h;
+        ctx.fillRect(left, sY, width, height);
+        ctx.globalAlpha = 1;
+      }
+
+      ctx.restore();
+    }
+
+    // ======== TRAJECTORY (aim) ========
     function drawAimTrajectory(){
       if (!bird || birdLaunched || !draggingBird || !canLaunch) return;
 
@@ -1279,8 +1372,8 @@
       }
 
       const sc = worldToScreen(start.x, start.y);
-      const b = render.bounds;
-      const vw = (b.max.x - b.min.x);
+      const bnd = render.bounds;
+      const vw = (bnd.max.x - bnd.min.x);
       const rPx = (SLING.pullMax / vw) * render.canvas.width;
 
       ctx.beginPath();
@@ -1378,7 +1471,7 @@
       }
     }
 
-    // ======== BREAK LOGIC: halves -> quarters -> vanish ========
+    // ======== BREAK LOGIC + COLLISIONS + PHYSICS LOOP ========
     function addDebrisBody(body){
       body.__debris = true;
       body.frictionAir = DEBRIS.airFriction;
@@ -1533,7 +1626,6 @@
       updateHUD();
     }
 
-    // ======== COLLISION ENERGY ========
     function impactEnergy(bodyA, bodyB){
       const rv = Vector.sub(bodyA.velocity, bodyB.velocity);
       const rel = Vector.magnitude(rv);
@@ -1575,7 +1667,6 @@
       }
     }
 
-    // ======== PHYSICS LOOP ========
     function bindPhysics(IMGS){
       Events.on(engine, "collisionStart", (event)=>{
         processCollisionPairs(event.pairs);
@@ -1591,7 +1682,6 @@
       Events.on(engine, "beforeUpdate", ()=>{
         const baseY = window.innerHeight - LEVEL.floorHeight;
 
-        // debris cleanup
         for (let i = debris.length - 1; i >= 0; i--){
           const d = debris[i];
           const body = d.body;
@@ -1606,7 +1696,6 @@
           }
         }
 
-        // bird smooth flight
         if (bird && birdLaunched){
           const v = bird.velocity;
           const speed = Math.hypot(v.x, v.y);
@@ -1623,13 +1712,11 @@
           }
         }
 
-        // shake decay
         if (shakeTime > 0){
           shakeTime -= 1;
           shakeMag = lerp(shakeMag, 0, 0.22);
         }
 
-        // super fade
         if (superActive){
           superDim = lerp(superDim, SUPER_VISUAL.dimTarget, 0.10);
           superAuraPulse = lerp(superAuraPulse, 1.0, 0.10);
@@ -1639,7 +1726,6 @@
         }
         if (superBannerFrames > 0) superBannerFrames -= 1;
 
-        // SUPER: скин + качание + аура ударов
         if (superActive && bird && birdLaunched){
           superPulseT += 1;
           setBirdSuper();
@@ -1660,7 +1746,7 @@
 
               const dx = obj.position.x - bird.position.x;
               const dy = obj.position.y - bird.position.y;
-              const dist2 = dx*dx + dy*dy;
+              const dist2 = dx*dx+dy*dy;
               if (dist2 > r2) continue;
 
               const t = 1 - (Math.sqrt(dist2) / r);
@@ -1676,14 +1762,12 @@
           }
         }
 
-        // camera during drag (keep as before)
         if (draggingBird && !birdLaunched){
           camera.tx = camera.cx; camera.ty = camera.cy; camera.tzoom = camera.zoom;
           applyCamera(false);
           return;
         }
 
-        // ✅ base follow
         const followZoom = (bird && birdLaunched) ? 1.10 : 0.86;
 
         let baseTx, baseTy;
@@ -1695,7 +1779,6 @@
           baseTy = baseY - 300;
         }
 
-        // ✅ pan hold/decay: if user recently panned, keep; otherwise slowly return to 0
         if (camera.panHoldFrames > 0){
           camera.panHoldFrames -= 1;
         } else {
