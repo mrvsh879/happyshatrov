@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Office Birds — Camera & Zoom</title>
+  <title>Office Birds — Destruction</title>
 
   <style>
     html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#06121f; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; }
@@ -15,9 +15,23 @@
     .panel h1{ font-size:14px; margin:0 0 6px 0; font-weight:900; letter-spacing:.2px; }
     .panel small{ display:block; opacity:.88; font-size:12px; line-height:1.35; }
 
-    .btnbar{ display:flex; gap:10px; align-items:center; }
-    button{ background:rgba(255,255,255,.10); color:rgba(255,255,255,.92); border:1px solid rgba(255,255,255,.16); padding:8px 12px; border-radius:10px; cursor:pointer; font-weight:900; }
+    .btnbar{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    button{
+      background:rgba(255,255,255,.10);
+      color:rgba(255,255,255,.92);
+      border:1px solid rgba(255,255,255,.16);
+      padding:8px 12px;
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:900;
+      user-select:none;
+    }
     button:hover{ background:rgba(255,255,255,.16); }
+    button.super-on{
+      background:rgba(255, 210, 70, .18);
+      border-color:rgba(255, 210, 70, .38);
+      box-shadow: 0 0 0 2px rgba(255, 210, 70, .14) inset;
+    }
 
     .right{ position:fixed; top:16px; right:16px; z-index:10; width:360px; }
     .kv{ display:grid; grid-template-columns:1fr auto; gap:6px 10px; margin-top:8px; font-size:12px; opacity:.95; }
@@ -38,9 +52,9 @@
 <body>
   <div class="hud">
     <div class="panel">
-      <h1>Office Birds — Camera/Zoom</h1>
-      <small><b>Управление:</b> зажми человечка → тяни в любую сторону → отпусти (полетит в противоположную).</small>
-      <small>Сила = натяжение. <b>Стул появляется только после броска</b> (чисто декор, без физики).</small>
+      <h1>Office Birds — Destruction</h1>
+      <small><b>Управление:</b> зажми человечка → тяни в любую сторону → отпусти (летит в противоположную).</small>
+      <small><b>SUPER:</b> нажми кнопку во время попытки → урон x2.5, стул “качается”.</small>
       <div class="kv">
         <div>Счёт:</div><div id="score">0</div>
         <div>Сломано:</div><div id="broken">0</div>
@@ -52,6 +66,7 @@
     <div class="btnbar">
       <button id="resetBtn">Reset</button>
       <button id="debugBtn">DEBUG</button>
+      <button id="superBtn">SUPER</button>
     </div>
   </div>
 
@@ -59,9 +74,10 @@
     <div class="panel">
       <h1>Цель</h1>
       <small>Выбей всех менеджеров 🏆</small>
-      <small>Камера следит за полётом, но <b>не двигается во время натяжения</b>.</small>
+      <small>Камера следит за полётом, не двигается во время натяжения. Сильный удар → тряска.</small>
       <div class="kv">
         <div>Статус:</div><div id="status">Загрузка…</div>
+        <div>SUPER:</div><div id="superState">OFF</div>
       </div>
     </div>
   </div>
@@ -124,29 +140,53 @@
 
     let DEBUG = false;
 
-    // ✅ Стул теперь чисто декор (НЕ физический body)
+    // Стул теперь decal (НЕ физический body)
     let chairDecal = null; // {x,y,scale,w,h}
+
+    // SUPER (до респавна)
+    let superActive = false;
+    let superCharge = 1.0;     // визуальный коэффициент "качания"
+    let superPulseT = 0;
+
+    // Камера-шейк
+    let shakeTime = 0;
+    let shakeMag = 0;
+
+    // Дебрис-осколки (мелкие детали)
+    const debris = []; // {body, ttl, stillFrames}
 
     const structure = { pillars: [], beams: [], managers: [], activated: false };
     const stats = { score:0, broken:0, hits:0, wins:0 };
 
-    // ✅ Дольше живёт птица
+    // Дольше живёт птица
     const AUTO_RESPAWN_MS = 9000;
 
-    // ✅ Параметры урона (можно крутить)
+    // Параметры урона/разрушения
     const DMG = {
-      // масштаб урона от энергии удара
-      energyScale: 0.055,
-      // минимальная энергия, чтобы вообще начинать ломать
-      minEnergy: 7.0,
+      // базовый масштаб урона (чем больше — тем быстрее ломает)
+      energyScale: 0.070,
+      // минимальная энергия, чтобы наносить урон
+      minEnergy: 5.0,
 
-      // HP объектов (чем меньше — тем быстрее ломается)
-      hpBeam: 14,
-      hpPillar: 18,
-      hpManager: 9,
+      // HP объектов (меньше = ломается быстрее)
+      hpBeam: 10,
+      hpPillar: 12,
+      hpManager: 7,
 
-      // "сильный удар" для автолома
-      hardHitEnergy: 18.0,
+      // шейк камеры от сильных ударов
+      shakeEnergyThreshold: 18,
+      shakeMax: 18,
+
+      // супер-множитель урона
+      superMultiplier: 2.5,
+    };
+
+    // поведение осколков
+    const DEBRIS = {
+      ttlMs: 5200,           // через сколько удалять в любом случае
+      minSpeedToCountStill: 0.18,
+      stillFramesToVanish: 45, // если лежит неподвижно ~0.75с — исчезает
+      airFriction: 0.020,
     };
 
     const SPR = {
@@ -177,7 +217,6 @@
       tzoom: 1.0,
       worldMinX: -200,
       worldMaxX: 5200,
-      // ✅ высокий "потолок", чтобы вверх летало нормально
       worldMinY: -3200,
       worldMaxY: 2600,
       smoothing: 0.12
@@ -215,6 +254,10 @@
       $("broken").textContent = String(stats.broken);
       $("hits").textContent   = String(stats.hits);
       $("wins").textContent   = String(stats.wins);
+      $("superState").textContent = superActive ? "ON" : "OFF";
+      const sb = $("superBtn");
+      if (superActive) sb.classList.add("super-on");
+      else sb.classList.remove("super-on");
     }
 
     function start(IMGS){
@@ -264,10 +307,9 @@
       bindPointerControls(IMGS);
       bindPhysics(IMGS);
 
-      // ✅ Рисуем декор-стул поверх сцены (без физики)
+      // decals/effects draw (стул/индикаторы)
       Events.on(render, "afterRender", ()=>{
-        if (!chairDecal) return;
-        drawChairDecal(IMGS);
+        if (chairDecal) drawChairDecal(IMGS);
       });
 
       Render.run(render);
@@ -278,6 +320,22 @@
         DEBUG = !DEBUG;
         toast(DEBUG ? "DEBUG: ON" : "DEBUG: OFF", 900);
         resetAll(IMGS);
+      });
+
+      $("superBtn").addEventListener("click", ()=>{
+        if (!bird) return;
+        // SUPER активируется на текущую попытку до респавна
+        if (!superActive){
+          superActive = true;
+          superPulseT = 0;
+          toast("SUPER ON ⚡", 900);
+          updateHUD();
+        } else {
+          // можно выключать тоже
+          superActive = false;
+          toast("SUPER OFF", 700);
+          updateHUD();
+        }
       });
 
       window.addEventListener("resize", ()=>onResize(IMGS));
@@ -301,12 +359,14 @@
       World.add(world, ground);
 
       stats.score = 0; stats.broken = 0; stats.hits = 0; stats.wins = 0;
-      updateHUD();
 
       structure.pillars = [];
       structure.beams = [];
       structure.managers = [];
       structure.activated = false;
+
+      // clean debris
+      debris.length = 0;
 
       bird = null;
       slingshot = null;
@@ -319,12 +379,20 @@
 
       chairDecal = null;
 
+      superActive = false;
+      superCharge = 1.0;
+      superPulseT = 0;
+
+      shakeTime = 0;
+      shakeMag = 0;
+
       buildLevel(IMGS);
       spawnBird(IMGS);
       setupSlingshot();
       setupCameraInitial();
 
       $("status").textContent = "Готово";
+      updateHUD();
     }
 
     function makeBreakable(body, type, hp){
@@ -399,9 +467,7 @@
             "beam",
             DMG.hpBeam
           );
-          b.__isBeam = true;
           b.__beamScale = beamScale;
-          b.__split = false;
           return b;
         }
 
@@ -433,8 +499,8 @@
             DMG.hpManager
           );
 
-          m.__isManager = true;
           m.__alive = true;
+          m.__mScale = mScale;
           managers.push(m);
         }
 
@@ -528,7 +594,7 @@
       slingshot = null;
     }
 
-    // ✅ Стул = decal (НЕ body)
+    // Стул = decal (НЕ body)
     function spawnChairDecal(IMGS, atPos){
       const chairScale = SPR.chairW / IMGS.imgChair.width;
       chairDecal = {
@@ -536,8 +602,13 @@
         y: atPos.y + 64,
         scale: chairScale,
         w: IMGS.imgChair.width * chairScale,
-        h: IMGS.imgChair.height * chairScale
+        h: IMGS.imgChair.height * chairScale,
+        rot: 0
       };
+    }
+
+    function clearChairDecal(){
+      chairDecal = null;
     }
 
     function scheduleBirdRespawn(IMGS, delayMs){
@@ -554,7 +625,12 @@
           slingshot = null;
         }
 
-        chairDecal = null;
+        clearChairDecal();
+
+        // SUPER сбрасываем при респавне
+        superActive = false;
+        superCharge = 1.0;
+        superPulseT = 0;
 
         spawnBird(IMGS);
         setupSlingshot();
@@ -566,143 +642,108 @@
         dragView = null;
 
         $("status").textContent = "Готово";
+        updateHUD();
       }, delayMs);
     }
 
-    // Ломание балки на 2 части
-    function splitBeam(beam){
-      if (!beam || !beam.__isBeam || beam.__split) return;
-      beam.__split = true;
+    // ======== ДЕБРИС / РАЗРУШЕНИЕ В МЕЛКИЕ ДЕТАЛИ ========
 
-      const pos = beam.position;
-      const angle = beam.angle;
-      const w = beam.bounds.max.x - beam.bounds.min.x;
-      const h = beam.bounds.max.y - beam.bounds.min.y;
-
-      const gap = 12;
-      const w2 = Math.max(72, (w - gap) / 2);
-
-      const dir = Vector.rotate({ x: 1, y: 0 }, angle);
-      const off = Vector.mult(dir, (w2/2 + gap/2));
-
-      const leftPos  = Vector.sub(pos, off);
-      const rightPos = Vector.add(pos, off);
-
-      function makePiece(p){
-        const piece = Bodies.rectangle(p.x, p.y, w2, h, {
-          isStatic: false,
-          friction: 0.95,
-          restitution: 0.02,
-          density: 0.0022,
-          chamfer: { radius: 4 },
-          render: DEBUG
-            ? { fillStyle:"rgba(255,120,0,0.25)", strokeStyle:"rgba(255,170,90,0.95)", lineWidth:2 }
-            : { sprite:{ texture: ASSETS.beam, xScale: beam.__beamScale * (w2 / (SPR.beamW)), yScale: beam.__beamScale } }
-        });
-        piece.__isBeam = true;
-        piece.__split = true;
-        piece.__beamScale = beam.__beamScale;
-
-        makeBreakable(piece, "beam", DMG.hpBeam);
-        piece.__hp = 1; // куски считаем "почти сломанные"
-
-        Body.setAngle(piece, angle);
-        Body.setVelocity(piece, beam.velocity);
-        Body.setAngularVelocity(piece, beam.angularVelocity);
-        piece.frictionAir = beam.frictionAir || 0.010;
-        return piece;
-      }
-
-      const p1 = makePiece(leftPos);
-      const p2 = makePiece(rightPos);
-
-      World.remove(world, beam);
-
-      const idx = structure.beams.indexOf(beam);
-      if (idx >= 0) structure.beams.splice(idx, 1);
-      structure.beams.push(p1, p2);
-
-      World.add(world, [p1, p2]);
-
-      stats.broken += 1;
-      stats.score += 15;
-      updateHUD();
-      toast("ДЕРЕВО ТРЕСНУЛО 💥", 650);
+    function addDebrisBody(body){
+      body.__debris = true;
+      body.frictionAir = DEBRIS.airFriction;
+      debris.push({ body, ttl: Date.now() + DEBRIS.ttlMs, stillFrames: 0 });
+      World.add(world, body);
     }
 
-    // ✅ Ломание колонны на 3 куска
-    function breakPillar(p){
-      if (!p || p.__broken) return;
-      p.__broken = true;
+    function shatterRect(body, tex, scaleX, scaleY, piecesX, piecesY){
+      if (!body || body.__broken) return;
+      body.__broken = true;
 
-      const pos = p.position;
-      const angle = p.angle;
+      const pos = body.position;
+      const angle = body.angle;
 
-      const w = p.bounds.max.x - p.bounds.min.x;
-      const h = p.bounds.max.y - p.bounds.min.y;
+      const w = body.bounds.max.x - body.bounds.min.x;
+      const h = body.bounds.max.y - body.bounds.min.y;
 
-      const pieceH = Math.max(70, h / 3);
-      const pieceW = w * 0.95;
+      // мелкие куски (ограничим, чтобы не убить браузер)
+      const px = clamp(piecesX|0, 2, 8);
+      const py = clamp(piecesY|0, 2, 8);
 
-      // три сегмента по высоте
-      const up = Vector.rotate({x:0,y:-1}, angle);
-      const step = pieceH * 0.95;
+      const cw = w / px;
+      const ch = h / py;
 
-      const p1pos = Vector.add(pos, Vector.mult(up, -step));
-      const p2pos = Vector.add(pos, Vector.mult(up, 0));
-      const p3pos = Vector.add(pos, Vector.mult(up, step));
+      const right = Vector.rotate({x:1,y:0}, angle);
+      const down  = Vector.rotate({x:0,y:1}, angle);
 
-      const pillarScale = SPR.pillarH / (p.render.sprite && p.render.sprite.yScale ? (SPR.pillarH / p.render.sprite.yScale) : 1);
+      // удаляем целый объект
+      World.remove(world, body);
 
-      function makePiece(at){
-        const piece = Bodies.rectangle(at.x, at.y, pieceW, pieceH, {
-          isStatic: false,
-          friction: 0.95,
-          restitution: 0.02,
-          density: 0.0023,
-          chamfer: { radius: 6 },
-          render: DEBUG
-            ? { fillStyle:"rgba(0,210,255,0.16)", strokeStyle:"rgba(110,240,255,0.95)", lineWidth:2 }
-            : { sprite:{ texture: ASSETS.pillar, xScale: (p.render.sprite?.xScale || 1), yScale: (p.render.sprite?.yScale || 1) } }
-        });
-        makeBreakable(piece, "pillar", 1);
-        Body.setAngle(piece, angle);
-        Body.setVelocity(piece, p.velocity);
-        Body.setAngularVelocity(piece, p.angularVelocity);
-        piece.frictionAir = 0.016;
-        return piece;
+      // выкидываем из массивов структуры
+      const arr = (body.__type === "beam") ? structure.beams
+               : (body.__type === "pillar") ? structure.pillars
+               : (body.__type === "manager") ? structure.managers
+               : null;
+      if (arr){
+        const idx = arr.indexOf(body);
+        if (idx >= 0) arr.splice(idx, 1);
       }
 
-      const a = makePiece(p1pos);
-      const b = makePiece(p2pos);
-      const c = makePiece(p3pos);
+      // спавним куски
+      for (let iy=0; iy<py; iy++){
+        for (let ix=0; ix<px; ix++){
+          const localX = (ix + 0.5) * cw - w/2;
+          const localY = (iy + 0.5) * ch - h/2;
 
-      World.remove(world, p);
+          const wp = Vector.add(
+            pos,
+            Vector.add(
+              Vector.mult(right, localX),
+              Vector.mult(down, localY)
+            )
+          );
 
-      const idx = structure.pillars.indexOf(p);
-      if (idx >= 0) structure.pillars.splice(idx, 1);
-      structure.pillars.push(a,b,c);
+          const piece = Bodies.rectangle(wp.x, wp.y, Math.max(10, cw*0.92), Math.max(10, ch*0.92), {
+            isStatic: false,
+            friction: 0.95,
+            restitution: 0.05,
+            density: 0.0022,
+            chamfer: { radius: 2 },
+            render: DEBUG
+              ? { fillStyle:"rgba(255,255,255,0.12)", strokeStyle:"rgba(255,255,255,0.5)", lineWidth:1 }
+              : { sprite:{ texture: tex, xScale: scaleX, yScale: scaleY } }
+          });
 
-      World.add(world, [a,b,c]);
+          Body.setAngle(piece, angle);
+          // наследуем движение + небольшая "взрывная" рандомизация
+          const vx = body.velocity.x + (Math.random()-0.5)*2.2;
+          const vy = body.velocity.y + (Math.random()-0.5)*2.2;
+          Body.setVelocity(piece, {x:vx, y:vy});
+          Body.setAngularVelocity(piece, body.angularVelocity + (Math.random()-0.5)*0.35);
+
+          addDebrisBody(piece);
+        }
+      }
 
       stats.broken += 1;
-      stats.score += 20;
+      stats.score += 18;
       updateHUD();
-      toast("КОЛОННА РАЗЛЕТЕЛАСЬ 🪵", 700);
     }
+
+    // ======== ИГРОВАЯ ЛОГИКА / ПОБЕДА ========
 
     function killManager(m){
-      if (!m || !m.__isManager || !m.__alive) return;
+      if (!m || !m.__alive) return;
       m.__alive = false;
 
-      stats.hits += 1;
-      stats.score += 28;
-      updateHUD();
-      toast("Менеджер вылетел 😵", 800);
+      // разнести менеджера на куски
+      const tex = ASSETS.manager;
+      const s = m.__mScale || 1;
+      shatterRect(m, tex, s, s, 4, 4);
 
-      // чтобы не мешал: делаем легче и "скользким"
-      m.frictionAir = 0.06;
-      m.restitution = 0.12;
+      stats.hits += 1;
+      stats.score += 30;
+      updateHUD();
+      toast("Менеджер разлетелся 😵", 850);
       checkWin();
     }
 
@@ -710,11 +751,13 @@
       const alive = structure.managers.some(m => m.__alive);
       if (!alive){
         stats.wins += 1;
-        stats.score += 120;
+        stats.score += 140;
         updateHUD();
         toast("ПОБЕДА! Все менеджеры выбиты 🏆", 1600);
       }
     }
+
+    // ======== КАМЕРА ========
 
     function setupCameraInitial(){
       const baseY = window.innerHeight - LEVEL.floorHeight;
@@ -729,13 +772,22 @@
       camera.cy = force ? camera.ty : lerp(camera.cy, camera.ty, camera.smoothing);
       camera.zoom = force ? camera.tzoom : lerp(camera.zoom, camera.tzoom, camera.smoothing);
 
+      // camera shake
+      let sx = 0, sy = 0;
+      if (shakeTime > 0){
+        const t = shakeTime;
+        const amp = shakeMag * (t / 18);
+        sx = (Math.random()*2 - 1) * amp;
+        sy = (Math.random()*2 - 1) * amp;
+      }
+
       const vw = window.innerWidth / camera.zoom;
       const vh = window.innerHeight / camera.zoom;
 
-      let minX = camera.cx - vw/2;
-      let maxX = camera.cx + vw/2;
-      let minY = camera.cy - vh/2;
-      let maxY = camera.cy + vh/2;
+      let minX = (camera.cx + sx) - vw/2;
+      let maxX = (camera.cx + sx) + vw/2;
+      let minY = (camera.cy + sy) - vh/2;
+      let maxY = (camera.cy + sy) + vh/2;
 
       const wWorld = camera.worldMaxX - camera.worldMinX;
       const hWorld = camera.worldMaxY - camera.worldMinY;
@@ -762,7 +814,8 @@
       Render.lookAt(render, { min: render.bounds.min, max: render.bounds.max });
     }
 
-    // pointer -> world (во время drag по замороженным bounds)
+    // ======== УПРАВЛЕНИЕ ========
+
     function pointerToWorld(e){
       const rect = render.canvas.getBoundingClientRect();
       const sx = (e.clientX - rect.left) / rect.width;
@@ -834,10 +887,10 @@
         activateStructure();
         setBirdFly();
 
-        // ✅ стул появляется после броска, но это 100% декор (не body)
+        // стул после броска: decal
         spawnChairDecal(IMGS, bird.__start);
 
-        // ✅ сначала убираем резинку, потом задаём скорость
+        // сначала убираем резинку
         detachSlingshot();
 
         Body.setStatic(bird, false);
@@ -853,7 +906,6 @@
           Body.setVelocity(bird, { x: 0, y: 0 });
           Body.setAngularVelocity(bird, 0);
           Body.setVelocity(bird, vel);
-
           bird.frictionAir = 0.005;
         }
 
@@ -875,41 +927,57 @@
       });
     }
 
+    // ======== УРОН / КОЛЛИЗИИ ========
+
     function damageFromImpact(speedA, speedB, massRef){
-      // относительная "сила"
       const rel = Math.abs(speedA - speedB);
-      // энергия ~ mass * rel^2
       const energy = 0.5 * (massRef || 1) * rel * rel;
       return energy;
     }
 
-    function applyDamageTo(body, energy){
+    function applyDamageTo(body, energy, IMGS){
       if (!body || body.__broken) return;
-      if (typeof body.__hp !== "number") return; // не ломаем то, что не помечено
+      if (typeof body.__hp !== "number") return;
       if (energy < DMG.minEnergy) return;
 
-      const dmg = energy * DMG.energyScale;
-      body.__hp -= dmg;
+      const mult = superActive ? DMG.superMultiplier : 1.0;
+      const dmg = energy * DMG.energyScale * mult;
 
-      // жёсткий удар: ускоряем разрушение
-      if (energy >= DMG.hardHitEnergy) body.__hp -= dmg * 0.75;
+      body.__hp -= dmg;
 
       if (body.__hp <= 0){
         body.__broken = true;
 
-        if (body.__type === "beam" && body.__isBeam){
-          splitBeam(body);
+        // сильный удар = шейк
+        if (energy >= DMG.shakeEnergyThreshold) triggerShake(energy);
+
+        // швыряем на мелкие детали:
+        if (body.__type === "beam"){
+          // beam texture scale
+          const beamScale = body.__beamScale || (SPR.beamW / (IMGS.imgBeam.width || 1));
+          shatterRect(body, ASSETS.beam, beamScale, beamScale, 6, 2);
+          toast("Дерево в щепки 💥", 650);
           return;
         }
         if (body.__type === "pillar"){
-          breakPillar(body);
+          const pillarScale = SPR.pillarH / IMGS.imgPillar.height;
+          shatterRect(body, ASSETS.pillar, pillarScale, pillarScale, 4, 6);
+          toast("Колонна в осколки 🪵", 650);
           return;
         }
-        if (body.__type === "manager" && body.__isManager){
+        if (body.__type === "manager"){
+          // manager already breaks via killManager normally, но если урон выбил hp:
           killManager(body);
           return;
         }
       }
+    }
+
+    function triggerShake(energy){
+      const over = energy - DMG.shakeEnergyThreshold;
+      const strength = clamp(over * 1.6, 6, DMG.shakeMax);
+      shakeMag = Math.max(shakeMag, strength);
+      shakeTime = Math.max(shakeTime, 18);
     }
 
     function bindPhysics(IMGS){
@@ -922,38 +990,75 @@
           const va = Math.hypot(a.velocity.x, a.velocity.y);
           const vb = Math.hypot(b.velocity.x, b.velocity.y);
 
-          // ✅ Урон рассчитываем по энергии столкновения
           const energy = damageFromImpact(va, vb, bird ? bird.mass : 1);
 
-          // 1) Урон по объектам от птицы
+          // Шейк от реально сильных ударов вообще (не только ломания)
+          if (energy >= DMG.shakeEnergyThreshold) triggerShake(energy);
+
+          // Урон от птицы + усиленный пуш
           if (bird && (a === bird || b === bird)){
             const other = (a === bird) ? b : a;
 
-            // толкаем сильнее (чтоб разлеталось)
             if (!other.isStatic){
               const speed = Math.hypot(bird.velocity.x, bird.velocity.y);
               if (speed > 1.1){
                 const dir = Vector.normalise(bird.velocity);
-                const push = Math.min(0.050, 0.012 + speed * 0.0045);
+                const mult = superActive ? 1.8 : 1.0;
+                const push = Math.min(0.060, (0.014 + speed * 0.0045) * mult);
                 Body.applyForce(other, other.position, { x: dir.x * push, y: dir.y * push });
               }
             }
 
-            // наносим урон всем "ломаемым" типам
-            applyDamageTo(other, energy);
+            applyDamageTo(other, energy, IMGS);
           }
 
-          // 2) Урон между элементами конструкции (чтобы ломалось не только от птицы)
-          // Например балка ударила колонну/менеджера и т.п.
+          // Урон между элементами конструкции (цепная реакция разрушения)
           if (energy >= DMG.minEnergy){
-            applyDamageTo(a, energy * 0.65);
-            applyDamageTo(b, energy * 0.65);
+            applyDamageTo(a, energy * 0.70, IMGS);
+            applyDamageTo(b, energy * 0.70, IMGS);
           }
         }
       });
 
       Events.on(engine, "beforeUpdate", ()=>{
         const baseY = window.innerHeight - LEVEL.floorHeight;
+
+        // супер-качание стула
+        if (superActive){
+          superPulseT += 1;
+          // мягкое "качание" видно даже когда птица уже улетела — это просто эффект
+          superCharge = 1.0 + Math.sin(superPulseT * 0.18) * 0.12;
+        } else {
+          superCharge = lerp(superCharge, 1.0, 0.12);
+        }
+
+        // decay shake
+        if (shakeTime > 0){
+          shakeTime -= 1;
+          shakeMag = lerp(shakeMag, 0, 0.22);
+        }
+
+        // очистка дебриса: исчезает при “макс разрухе”
+        for (let i = debris.length - 1; i >= 0; i--){
+          const d = debris[i];
+          const body = d.body;
+          if (!body){
+            debris.splice(i,1);
+            continue;
+          }
+
+          const sp = Math.hypot(body.velocity.x, body.velocity.y);
+          if (sp < DEBRIS.minSpeedToCountStill) d.stillFrames += 1;
+          else d.stillFrames = 0;
+
+          const expired = Date.now() > d.ttl;
+          const tooStill = d.stillFrames >= DEBRIS.stillFramesToVanish;
+
+          if (expired || tooStill){
+            World.remove(world, body);
+            debris.splice(i,1);
+          }
+        }
 
         // пока тянем — камера заморожена
         if (draggingBird && !birdLaunched){
@@ -977,14 +1082,12 @@
           camera.ty = bird.position.y - 120;
           camera.tzoom = 1.10;
 
-          // ✅ расширенный out-of-bounds: вверх больше не режем
           const out =
             bird.position.x < -500 ||
             bird.position.x > camera.worldMaxX + 500 ||
             bird.position.y > window.innerHeight + 900 ||
             bird.position.y < camera.worldMinY - 400;
 
-          // если реально улетел далеко — респавним не мгновенно
           if (out) scheduleBirdRespawn(IMGS, 1200);
 
           const speed = Math.hypot(bird.velocity.x, bird.velocity.y);
@@ -1002,6 +1105,8 @@
       });
     }
 
+    // ======== ДЕКОР-СТУЛ РЕНДЕР ========
+
     function worldToScreen(x, y){
       const b = render.bounds;
       const sx = (x - b.min.x) / (b.max.x - b.min.x) * render.canvas.width;
@@ -1016,21 +1121,34 @@
       const img = IMGS.imgChair;
       const b = render.bounds;
 
-      // если далеко за экраном — не рисуем
       if (chairDecal.x < b.min.x - 500 || chairDecal.x > b.max.x + 500) return;
 
       const p = worldToScreen(chairDecal.x, chairDecal.y);
 
-      // world-size -> screen-size
       const vw = (b.max.x - b.min.x);
       const vh = (b.max.y - b.min.y);
 
-      const sw = chairDecal.w / vw * render.canvas.width;
-      const sh = chairDecal.h / vh * render.canvas.height;
+      // "качание" стула при SUPER
+      const swing = superActive ? Math.sin(superPulseT * 0.22) * 0.18 : 0;
+      const scalePulse = superCharge;
+
+      const sw = (chairDecal.w / vw * render.canvas.width) * scalePulse;
+      const sh = (chairDecal.h / vh * render.canvas.height) * scalePulse;
 
       ctx.save();
-      ctx.globalAlpha = 1.0;
-      ctx.drawImage(img, p.x - sw/2, p.y - sh/2, sw, sh);
+      ctx.translate(p.x, p.y);
+      ctx.rotate(swing);
+      ctx.drawImage(img, -sw/2, -sh/2, sw, sh);
+
+      // glow при SUPER
+      if (superActive){
+        ctx.globalAlpha = 0.25;
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.max(sw, sh)*0.35, 0, Math.PI*2);
+        ctx.fillStyle = "rgba(255,210,70,0.35)";
+        ctx.fill();
+      }
+
       ctx.restore();
     }
 
