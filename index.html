@@ -246,22 +246,27 @@
       settleFrictionAir: 0.012
     };
 
-    // урон/ломание
+    // урон/ломание (исправлено: ломаем не по микроколлизиям, а по HP от удара птицы / SUPER-каста)
     const DMG = {
-      // пороги энергии для стадий ломания
-      split1Energy: 3.6,     // пополам
-      split2Energy: 4.4,     // четвертинки
-      vanishEnergy: 3.2,     // после четвертинок — исчезает
+      // ✅ Ломание НЕ по одному удару, а через HP (снимается только от удара птицы,
+      //    либо от SUPER-ауры после нажатия кнопки SUPER)
+      dmgK: 0.08,               // чем меньше — тем дольше живут объекты
+      minHitEnergy: 1.8,        // игнор слабых касаний
 
-      // шейк
-      shakeEnergyThreshold: 8.0,
+      // HP на каждую стадию (целый -> половинки -> четвертинки)
+      hpStage0: 1.25,
+      hpStage1: 1.10,
+      hpStage2: 0.90,
+
+      // шейк камеры
+      shakeEnergyThreshold: 9.0,
       shakeMax: 22,
 
-      // super
-      superMultiplier: 3.2,
+      // SUPER (усиление ТОЛЬКО после нажатия кнопки)
+      superMultiplier: 2.8,
       superAuraRadius: 240,
-      superAuraEnergyPerTick: 16.0,
-      superAuraTickEvery: 5
+      superAuraEnergyPerTick: 12.0,
+      superAuraTickEvery: 6
     };
 
     const DEBRIS = {
@@ -524,6 +529,10 @@
       body.__tex = tex;
       body.__sx = sx;
       body.__sy = sy;
+
+      // ✅ HP чтобы не ломалось с первого удара
+      body.__hp = DMG.hpStage0;
+
       return body;
     }
 
@@ -1088,9 +1097,13 @@
       dstBody.__tex = srcBody.__tex;
       dstBody.__sx = srcBody.__sx;
       dstBody.__sy = srcBody.__sy;
-      dstBody.__breakStage = srcBody.__breakStage; // обновим ниже
+      dstBody.__breakStage = srcBody.__breakStage;
       dstBody.__broken = false;
       dstBody.__debris = true;
+
+      // ✅ по умолчанию HP (после присвоения __breakStage мы его переопределим)
+      dstBody.__hp = DMG.hpStage0;
+
       if (!DEBUG){
         dstBody.render.sprite.texture = srcBody.__tex;
         dstBody.render.sprite.xScale = srcBody.__sx;
@@ -1115,10 +1128,6 @@
     }
 
     function splitBodyByStage(body){
-      // stage 0 -> 1: split in half
-      // stage 1 -> 2: split into quarters
-      // stage 2 -> vanish (remove)
-
       if (!body) return;
       const stage = body.__breakStage || 0;
 
@@ -1154,7 +1163,6 @@
       const baseAV = body.angularVelocity || 0;
 
       if (stage === 0){
-        // split in half along longer axis
         const splitAlongX = (w >= h);
         if (splitAlongX){
           const hw = w/2;
@@ -1168,6 +1176,9 @@
           const b = makePiece(p2.x, p2.y, hw*0.95, ph*0.95, angle, body);
 
           a.__breakStage = 1; b.__breakStage = 1;
+
+          a.__hp = DMG.hpStage1;
+          b.__hp = DMG.hpStage1;
 
           Body.setVelocity(a, { x: baseVel.x + (Math.random()-0.5)*1.4, y: baseVel.y + (Math.random()-0.5)*1.4 });
           Body.setVelocity(b, { x: baseVel.x + (Math.random()-0.5)*1.4, y: baseVel.y + (Math.random()-0.5)*1.4 });
@@ -1187,6 +1198,9 @@
           const b = makePiece(p2.x, p2.y, pw*0.95, hh*0.95, angle, body);
 
           a.__breakStage = 1; b.__breakStage = 1;
+
+          a.__hp = DMG.hpStage1;
+          b.__hp = DMG.hpStage1;
 
           Body.setVelocity(a, { x: baseVel.x + (Math.random()-0.5)*1.4, y: baseVel.y + (Math.random()-0.5)*1.4 });
           Body.setVelocity(b, { x: baseVel.x + (Math.random()-0.5)*1.4, y: baseVel.y + (Math.random()-0.5)*1.4 });
@@ -1219,6 +1233,8 @@
         const p = Vector.add(pos, off);
         const piece = makePiece(p.x, p.y, qw*0.92, qh*0.92, angle, body);
         piece.__breakStage = 2;
+        piece.__hp = DMG.hpStage2;
+
         Body.setVelocity(piece, { x: baseVel.x + (Math.random()-0.5)*2.0, y: baseVel.y + (Math.random()-0.5)*2.0 });
         Body.setAngularVelocity(piece, baseAV + (Math.random()-0.5)*0.45);
         addDebrisBody(piece);
@@ -1237,25 +1253,35 @@
       return 0.5 * massRef * rel * rel;
     }
 
-    function tryBreak(body, energy){
-      if (!body) return;
-      if (!body.__type) return;           // не ломаем всё подряд
-      if (body.isStatic) return;          // пока статик — не ломаем (до активации)
-      if (body.__debris && body.__breakStage >= 2 && energy < DMG.vanishEnergy) return;
+    // ✅ Исправлено: ломание только от удара птицы / SUPER-ауры после каста + HP по стадиям
+    function tryBreak(body, energy, fromBird){
+      if (!body || !body.__type) return;
 
-      // SUPER множитель
-      const e = energy * (superActive ? DMG.superMultiplier : 1.0);
+      // ✅ НЕ ломаем статики (пока стоят до броска / до активации)
+      if (body.isStatic) return;
 
-      const stage = body.__breakStage || 0;
-      if (stage === 0 && e >= DMG.split1Energy){
-        splitBodyByStage(body);
-      } else if (stage === 1 && e >= DMG.split2Energy){
-        splitBodyByStage(body);
-      } else if (stage >= 2 && e >= DMG.vanishEnergy){
-        splitBodyByStage(body);
-      }
+      // ✅ Ломаем только от удара птицы,
+      // либо от SUPER-ауры (но она включается только после нажатия кнопки SUPER)
+      const allow = (fromBird === true) || (superActive === true);
+      if (!allow) return;
+
+      const mult = superActive ? DMG.superMultiplier : 1.0;
+      const e = energy * mult;
+
+      // игнор слабых касаний
+      if (e < DMG.minHitEnergy) return;
+
+      // ✅ снимаем HP
+      const dmg = e * DMG.dmgK;
+      body.__hp = (typeof body.__hp === "number" ? body.__hp : DMG.hpStage0) - dmg;
+
+      if (body.__hp > 0) return;
+
+      // HP кончился -> делим/исчезаем
+      splitBodyByStage(body);
     }
 
+    // ✅ Исправлено: обычные коллизии домиков НЕ ломают.
     function processCollisionPairs(pairs){
       if (!structure.activated) return;
 
@@ -1265,9 +1291,11 @@
 
         if (energy >= DMG.shakeEnergyThreshold) triggerShake(energy);
 
-        // ломание на всех объектах со стадиями
-        tryBreak(a, energy);
-        tryBreak(b, energy);
+        // ✅ Ломаем только если в паре есть птица.
+        if (bird && (a === bird || b === bird)){
+          const other = (a === bird) ? b : a;
+          tryBreak(other, energy, true);
+        }
       }
     }
 
@@ -1278,13 +1306,11 @@
       });
 
       Events.on(engine, "collisionActive", (event)=>{
-        // слабее, чтобы не крошило бесконечно от микроконтактов
+        // ✅ НЕ ломаем от микроконтактов (иначе домики крошатся сами).
+        // Оставляем только лёгкий шейк на очень сильных ударах.
         for (const pair of event.pairs){
-          const a = pair.bodyA, b = pair.bodyB;
-          const energy = impactEnergy(a, b) * 0.22;
+          const energy = impactEnergy(pair.bodyA, pair.bodyB) * 0.12;
           if (energy >= DMG.shakeEnergyThreshold) triggerShake(energy);
-          tryBreak(a, energy);
-          tryBreak(b, energy);
         }
       });
 
@@ -1339,7 +1365,7 @@
         }
         if (superBannerFrames > 0) superBannerFrames -= 1;
 
-        // SUPER: скин + качание + аура ударов
+        // SUPER: скин + качание + аура ударов (урон только после каста — superActive включается кликом)
         if (superActive && bird && birdLaunched){
           superPulseT += 1;
           setBirdSuper();
@@ -1366,7 +1392,8 @@
               const t = 1 - (Math.sqrt(dist2) / r);
               const bonusEnergy = DMG.superAuraEnergyPerTick * (0.35 + 0.65*t);
 
-              tryBreak(obj, bonusEnergy);
+              // ✅ урон в ауре идёт только потому что superActive === true
+              tryBreak(obj, bonusEnergy, false);
 
               if (!obj.isStatic){
                 const dir = Vector.normalise({x:dx, y:dy});
