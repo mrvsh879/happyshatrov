@@ -1,5 +1,5 @@
 export function createCamera(state){
-  const { camera, LEVEL, lerp, clamp } = state;
+  const { camera, render, LEVEL, lerp, clamp } = state;
 
   function setupCameraInitial(){
     const baseY = (typeof state.ground !== "undefined" && state.ground)
@@ -33,9 +33,6 @@ export function createCamera(state){
 
     const vw = window.innerWidth / camera.zoom;
     const vh = window.innerHeight / camera.zoom;
-
-    const render = state.render;
-    if (!render || !render.bounds) return;
 
     render.bounds.min.x = (camera.cx + sx) - vw/2;
     render.bounds.min.y = (camera.cy + sy) - vh/2;
