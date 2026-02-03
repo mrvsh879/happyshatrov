@@ -246,9 +246,8 @@ import { createUpdateLoop } from "./updateLoop.js";
   ]).then(([imgBg, imgGround, imgBeam, imgPillar, imgManager, imgIdle, imgFly, imgChair, imgSuper])=>{
     start({imgBg, imgGround, imgBeam, imgPillar, imgManager, imgIdle, imgFly, imgChair, imgSuper});
   }).catch((e)=>{
-    const failedAsset = e && (e.asset || e.message) ? (e.asset || e.message) : "unknown";
-    console.error("PNG ошибка:", failedAsset, e);
-    $("status").textContent = "Ошибка PNG: " + failedAsset;
+    console.error(e);
+    $("status").textContent = "Ошибка PNG";
     toast("PNG ошибка — проверь assets/…", 2500);
   });
 
