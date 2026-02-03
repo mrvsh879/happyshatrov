@@ -4,1093 +4,1337 @@
   <meta charset="utf-8" />
   <!-- ✅ mobile + disable page zoom (we do camera zoom instead) -->
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-  <title>Slingshot Office MVP</title>
+  <title>Office Birds — Destruction</title>
 
   <style>
-    :root{
-      --bg:#0b0f16;
-      --panel: rgba(15, 22, 35, .62);
-      --stroke: rgba(255,255,255,.16);
-      --text: rgba(255,255,255,.88);
-      --muted: rgba(255,255,255,.65);
-      --accent: #6ee7ff;
-      --accent2:#a78bfa;
-      --danger:#ff5577;
-      --ok:#69ffb0;
-      --shadow: rgba(0,0,0,.35);
-      --glow: rgba(110,231,255,.22);
-      --radius: 14px;
-      --radius2: 18px;
-      --pad: 14px;
-      --pad2: 18px;
-      --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, "Noto Sans", sans-serif;
-      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    html, body {
+      margin:0; padding:0; width:100%; height:100%;
+      overflow:hidden; background:#050a12;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      -webkit-user-select:none; user-select:none;
+      -webkit-touch-callout:none;
     }
+    #wrap { position:fixed; inset:0; }
+    canvas { display:block; width:100%; height:100%; touch-action:none; }
 
-    html,body{
-      height:100%;
-      margin:0;
-      background: radial-gradient(1200px 600px at 25% 20%, rgba(167,139,250,.12), transparent 45%),
-                  radial-gradient(900px 500px at 75% 10%, rgba(110,231,255,.10), transparent 40%),
-                  radial-gradient(900px 900px at 60% 85%, rgba(105,255,176,.08), transparent 55%),
-                  var(--bg);
-      color:var(--text);
-      font-family: var(--font);
-      overflow:hidden;
-      user-select:none;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    /* Canvas full-screen */
-    #wrap{
-      position:fixed;
-      inset:0;
-      display:flex;
-      align-items:stretch;
-      justify-content:center;
-    }
-
-    canvas{
-      width:100%;
-      height:100%;
-      display:block;
-      background: transparent;
-      touch-action:none; /* we manage */
-    }
-
-    /* HUD / UI */
-    .hud{
-      position:fixed;
-      inset:0;
-      pointer-events:none;
-      display:flex;
-      flex-direction:column;
-      gap:12px;
-      padding: 16px;
-      box-sizing:border-box;
-    }
-
-    .topbar{
-      display:flex;
-      gap:12px;
-      align-items:flex-start;
-      justify-content:space-between;
+    .hud {
+      position:fixed; left:16px; top:16px; z-index:10;
+      display:flex; gap:12px; align-items:flex-start;
+      max-width: calc(100vw - 32px);
       pointer-events:none;
     }
-
-    .brand{
-      pointer-events:none;
-      display:flex;
-      flex-direction:column;
-      gap:6px;
-      padding: 12px 14px;
-      border-radius: var(--radius2);
-      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.035));
-      border:1px solid var(--stroke);
-      box-shadow: 0 12px 40px var(--shadow);
-      backdrop-filter: blur(10px);
-      max-width: 520px;
-    }
-
-    .brand .row{
-      display:flex;
-      gap:10px;
-      align-items:center;
-    }
-
-    .logo{
-      width:36px;height:36px;border-radius:12px;
-      background: radial-gradient(12px 12px at 30% 30%, rgba(255,255,255,.6), transparent 65%),
-                  linear-gradient(135deg, rgba(110,231,255,.85), rgba(167,139,250,.85));
-      box-shadow: 0 0 0 1px rgba(255,255,255,.10) inset, 0 14px 35px rgba(110,231,255,.12);
-      flex:0 0 auto;
-    }
-
-    .brand h1{
-      margin:0;
-      font-size:14px;
-      letter-spacing:.5px;
-      font-weight:700;
-      line-height:1.1;
-    }
-
-    .brand p{
-      margin:0;
-      font-size:12px;
-      color:var(--muted);
-      line-height:1.4;
-    }
-
-    .btns{
+    .panel {
       pointer-events:auto;
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      justify-content:flex-end;
-      align-items:center;
+      background:rgba(9,18,28,.55);
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:10px;
+      padding:10px 12px;
+      color:rgba(255,255,255,.92);
+      backdrop-filter: blur(6px);
+      box-shadow:0 10px 30px rgba(0,0,0,.25);
+      min-width:270px;
     }
+    .panel h1{ font-size:14px; margin:0 0 6px 0; font-weight:900; letter-spacing:.2px; }
+    .panel small{ display:block; opacity:.88; font-size:12px; line-height:1.35; }
 
-    .btn{
+    .btnbar{
+      pointer-events:auto;
+      display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+    }
+    button{
+      background:rgba(255,255,255,.10);
+      color:rgba(255,255,255,.92);
+      border:1px solid rgba(255,255,255,.16);
+      padding:10px 14px;
+      border-radius:12px;
       cursor:pointer;
-      border:none;
-      border-radius: 14px;
-      padding: 11px 13px;
-      color:var(--text);
-      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
-      border:1px solid var(--stroke);
-      box-shadow: 0 12px 30px rgba(0,0,0,.28);
-      backdrop-filter: blur(10px);
-      font-size:12px;
-      font-weight:700;
-      letter-spacing:.2px;
-      display:flex;
-      gap:8px;
-      align-items:center;
-      transition: transform .12s ease, border-color .12s ease, background .12s ease;
+      font-weight:900;
+      user-select:none;
+      touch-action: manipulation;
     }
-    .btn:hover{ transform: translateY(-1px); border-color: rgba(255,255,255,.25); }
-    .btn:active{ transform: translateY(0px) scale(.99); }
-
-    .btn .dot{
-      width:8px;height:8px;border-radius:50%;
-      background: rgba(255,255,255,.35);
-      box-shadow:0 0 0 4px rgba(255,255,255,.06);
+    button:hover{ background:rgba(255,255,255,.16); }
+    button.super-on{
+      background:rgba(255, 210, 70, .18);
+      border-color:rgba(255, 210, 70, .38);
+      box-shadow: 0 0 0 2px rgba(255, 210, 70, .14) inset;
     }
 
-    .btn.primary{
-      background: linear-gradient(135deg, rgba(110,231,255,.18), rgba(167,139,250,.16));
-      border-color: rgba(110,231,255,.28);
-      box-shadow: 0 18px 45px rgba(110,231,255,.10);
-    }
-
-    .btn.danger{
-      background: linear-gradient(135deg, rgba(255,85,119,.16), rgba(167,139,250,.10));
-      border-color: rgba(255,85,119,.28);
-      box-shadow: 0 18px 45px rgba(255,85,119,.08);
-    }
-
-    .btn.small{ padding: 9px 11px; border-radius: 12px; }
-
-    /* bottom panels */
-    .bottom{
+    .right{
+      position:fixed; top:16px; right:16px; z-index:10; width:360px;
       pointer-events:none;
-      margin-top:auto;
-      display:flex;
-      gap:12px;
-      align-items:flex-end;
-      justify-content:space-between;
-      flex-wrap:wrap;
     }
-
-    .panel{
-      pointer-events:auto;
-      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.035));
-      border:1px solid var(--stroke);
-      border-radius: var(--radius2);
-      box-shadow: 0 14px 45px rgba(0,0,0,.35);
-      backdrop-filter: blur(10px);
-      padding: 12px 14px;
-      min-width: 240px;
-      max-width: 680px;
-    }
-
-    .panel h2{
-      margin:0 0 8px 0;
-      font-size:12px;
-      letter-spacing:.35px;
-      color: rgba(255,255,255,.88);
-    }
-
-    .panel .grid{
-      display:grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap:10px 14px;
-      align-items:center;
-    }
+    .right .panel{ pointer-events:auto; }
 
     .kv{
-      display:flex;
-      flex-direction:column;
-      gap:3px;
-      min-width: 0;
+      display:grid; grid-template-columns:1fr auto;
+      gap:6px 10px; margin-top:8px; font-size:12px; opacity:.95;
     }
-    .kv .k{
-      font-size:11px;
-      color: rgba(255,255,255,.62);
-      letter-spacing:.2px;
-      line-height:1.1;
-    }
-    .kv .v{
-      font-size:12px;
-      font-weight:800;
-      letter-spacing:.15px;
-      line-height:1.2;
-      white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
-    }
+    .kv div:nth-child(2n){ font-weight:900; }
 
-    .meter{
-      height:10px;
-      border-radius:999px;
-      background: rgba(255,255,255,.07);
-      border:1px solid rgba(255,255,255,.11);
-      overflow:hidden;
-      box-shadow: 0 0 0 1px rgba(0,0,0,.12) inset;
-    }
-    .meter > i{
-      display:block;
-      height:100%;
-      width:40%;
-      background: linear-gradient(90deg, rgba(110,231,255,.95), rgba(167,139,250,.85));
-      box-shadow: 0 0 18px rgba(110,231,255,.18);
-      border-radius:999px;
-    }
-
-    .hint{
-      font-size:11px;
-      color: rgba(255,255,255,.68);
-      line-height:1.35;
-      margin-top:10px;
-    }
-    .hint b{ color: rgba(255,255,255,.9); }
-
-    /* Toast */
     .toast{
-      position:fixed;
-      left:50%;
-      top:16px;
+      position:fixed; left:50%; bottom:14px; transform:translateX(-50%);
+      z-index:10; padding:7px 12px; font-size:12px; color:rgba(255,255,255,.94);
+      background:rgba(0,0,0,.44); border:1px solid rgba(255,255,255,.12);
+      border-radius:999px; backdrop-filter: blur(6px);
+      pointer-events:none; opacity:0; transition:opacity .18s ease;
+      box-shadow:0 10px 30px rgba(0,0,0,.25);
+      max-width: calc(100vw - 24px);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .toast.show{ opacity:1; }
+
+    /* SUPER кнопка (как было — большая) */
+    .super-fly {
+      position: fixed;
+      left: 50%;
+      bottom: 26px;
       transform: translateX(-50%);
-      pointer-events:none;
-      padding: 10px 12px;
-      border-radius: 999px;
-      background: rgba(15,22,35,.72);
-      border:1px solid rgba(255,255,255,.14);
-      box-shadow: 0 18px 60px rgba(0,0,0,.4);
-      backdrop-filter: blur(10px);
-      font-size:12px;
-      font-weight:700;
-      color: rgba(255,255,255,.9);
-      opacity:0;
-      transition: opacity .25s ease, transform .25s ease;
-    }
-    .toast.show{
-      opacity:1;
-      transform: translateX(-50%) translateY(2px);
-    }
-
-    /* Overlay menu */
-    .menu{
-      position:fixed;
-      inset:0;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      pointer-events:none;
-      padding: 24px;
-      box-sizing:border-box;
-    }
-    .card{
+      z-index: 20;
+      display: none;
       pointer-events:auto;
-      width:min(720px, 92vw);
-      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.035));
-      border:1px solid rgba(255,255,255,.16);
-      border-radius: 22px;
-      box-shadow: 0 26px 90px rgba(0,0,0,.45);
-      backdrop-filter: blur(12px);
-      padding: 18px;
-      position:relative;
-      overflow:hidden;
     }
-    .card:before{
-      content:"";
-      position:absolute;
-      inset:-60px -60px auto auto;
-      width:220px;height:220px;
-      background: radial-gradient(circle at 35% 35%, rgba(110,231,255,.20), transparent 60%),
-                  radial-gradient(circle at 70% 70%, rgba(167,139,250,.22), transparent 65%);
-      filter: blur(2px);
-      transform: rotate(18deg);
+    .super-fly.show { display:block; }
+
+    .super-fly button{
+      font-size: 32px;
+      padding: 38px 68px;
+      border-radius: 28px;
+      border: 3px solid rgba(255,210,70,.75);
+      background: rgba(255,210,70,.18);
+      box-shadow:
+        0 20px 70px rgba(0,0,0,.48),
+        0 0 0 5px rgba(255,210,70,.14) inset;
+      letter-spacing: 1.1px;
+    }
+    .super-fly button:hover{ background: rgba(255,210,70,.26); }
+    .super-fly button.super-on{
+      background: rgba(255,210,70,.33);
+      box-shadow:
+        0 22px 78px rgba(0,0,0,.55),
+        0 0 0 5px rgba(255,210,70,.18) inset;
+    }
+    .super-fly .hint{
+      text-align:center;
+      margin-top:10px;
+      font-size:14px;
+      color: rgba(255,255,255,.88);
+      opacity:.92;
+      text-shadow: 0 2px 10px rgba(0,0,0,.55);
+      user-select:none;
       pointer-events:none;
     }
-    .card h3{
-      margin:0 0 6px 0;
-      font-size:14px;
-      letter-spacing:.25px;
-    }
-    .card p{
-      margin:0 0 14px 0;
-      font-size:12px;
-      color: rgba(255,255,255,.70);
-      line-height:1.45;
-    }
-    .card .row{
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      align-items:center;
-      justify-content:space-between;
-    }
 
+    /* ✅ START MENU overlay */
+    .menu {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.72);
+      backdrop-filter: blur(8px);
+    }
+    .menu.show { display: flex; }
+    .menu-card{
+      width: min(760px, calc(100vw - 40px));
+      border-radius: 18px;
+      padding: 24px 22px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(12,18,28,0.75);
+      box-shadow: 0 30px 120px rgba(0,0,0,0.55);
+      text-align: center;
+      color: rgba(255,255,255,0.95);
+      pointer-events:auto;
+    }
+    .menu-card h2{
+      margin: 0 0 10px 0;
+      font-size: 38px;
+      letter-spacing: 0.5px;
+      font-weight: 1000;
+    }
+    .menu-card p{
+      margin: 0 auto 14px auto;
+      max-width: 560px;
+      opacity: .9;
+      line-height: 1.45;
+      font-size: 15px;
+    }
+    .menu-start{
+      margin-top: 14px;
+      font-size: 28px;
+      padding: 20px 42px;
+      border-radius: 18px;
+      border: 2px solid rgba(255,210,70,.75);
+      background: rgba(255,210,70,.20);
+      box-shadow:
+        0 18px 80px rgba(0,0,0,.55),
+        0 0 0 6px rgba(255,210,70,.10) inset;
+    }
+    .menu-start:hover{ background: rgba(255,210,70,.30); }
+    .menu-mini{
+      margin-top: 12px;
+      font-size: 12px;
+      opacity: .85;
+    }
     .kbd{
-      display:inline-flex;
-      gap:6px;
-      align-items:center;
-      padding: 4px 8px;
-      border-radius: 10px;
-      background: rgba(255,255,255,.07);
-      border:1px solid rgba(255,255,255,.12);
-      color: rgba(255,255,255,.86);
-      font-weight:800;
-      letter-spacing:.1px;
-      font-size:11px;
-      font-family: var(--mono);
-      box-shadow: 0 0 0 1px rgba(0,0,0,.08) inset;
+      display:inline-block;
+      padding: 2px 7px;
+      border-radius: 7px;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.08);
+      font-weight: 800;
+      font-size: 12px;
+      margin: 0 3px;
     }
 
-    .menu.hidden{ display:none; }
-
-    /* Mobile tweaks */
-    @media (max-width: 720px){
-      .hud{ padding: 12px; }
-      .brand{ max-width: 100%; }
-      .panel{ min-width: min(320px, 92vw); }
-      .panel .grid{ grid-template-columns: 1fr 1fr; }
-      .btns{ justify-content:flex-start; }
+    /* ✅ Mobile layout tweaks */
+    @media (max-width: 820px){
+      .hud{ left:10px; top:10px; flex-direction:column; gap:10px; }
+      .panel{ min-width: 0; width: min(420px, calc(100vw - 20px)); }
+      .right{ right:10px; top:auto; bottom:10px; width: auto; max-width: 420px; }
+      .right .panel{ width: min(420px, calc(100vw - 20px)); }
+      .super-fly{ bottom: 18px; }
+      .super-fly button{ font-size: 28px; padding: 30px 52px; border-radius: 24px; }
+      .menu-card h2{ font-size: 30px; }
+      .menu-start{ font-size: 24px; padding: 18px 36px; }
+      button{ padding: 12px 14px; }
     }
   </style>
-
-  <!-- Matter.js CDN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"
-          integrity="sha512-B4BfEJ2R5r2lY4dVseK5a4mAeh1a8W3jPGgTbH+/I+8DTrgOeY8f1o5UM4Wpm9gB7c2H6cEoYxGZlLZ4Qq9c8A=="
-          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 
 <body>
-  <div id="wrap">
-    <canvas id="game"></canvas>
-  </div>
-
-  <!-- HUD -->
-  <div class="hud">
-    <div class="topbar">
-      <div class="brand">
-        <div class="row">
-          <div class="logo"></div>
-          <div>
-            <h1>Office Slingshot MVP</h1>
-            <p>Перетяни рогатку, отпусти — и смотри, как офис летит по физике. Колесо мыши — зум. ПК: <span class="kbd">R</span> reset.</p>
-          </div>
-        </div>
-      </div>
-
-      <div class="btns">
-        <button class="btn primary" id="startBtn"><span class="dot"></span> START</button>
-        <button class="btn" id="resetBtn"><span class="dot"></span> RESET</button>
-        <button class="btn small" id="debugBtn"><span class="dot"></span> DEBUG</button>
-      </div>
-    </div>
-
-    <div class="bottom">
-      <div class="panel">
-        <h2>Статус</h2>
-        <div class="grid">
-          <div class="kv">
-            <div class="k">Сила выстрела</div>
-            <div class="v" id="powerTxt">—</div>
-          </div>
-          <div class="kv">
-            <div class="k">Скорость</div>
-            <div class="v" id="speedTxt">—</div>
-          </div>
-          <div class="kv">
-            <div class="k">Разрушено</div>
-            <div class="v" id="brokenTxt">0</div>
-          </div>
-          <div class="kv">
-            <div class="k">FPS (≈)</div>
-            <div class="v" id="fpsTxt">—</div>
-          </div>
-        </div>
-        <div class="hint">
-          <b>Управление:</b> перетяни и отпусти. На тач-устройствах — свайп. Колесо мыши — зум.
-        </div>
-      </div>
-
-      <div class="panel" style="min-width: 280px;">
-        <h2>Здоровье офиса</h2>
-        <div class="meter"><i id="hpBar"></i></div>
-        <div class="hint" id="hpTxt">Цель: постройку можно развалить, если попасть достаточно сильно.</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Menu overlay (paused) -->
-  <div class="menu" id="menu">
-    <div class="card">
-      <h3>Готов?</h3>
+  <!-- ✅ START MENU -->
+  <div class="menu show" id="startMenu">
+    <div class="menu-card">
+      <h2>OFFICE BIRDS</h2>
       <p>
-        Это шуточный MVP: рогатка + офисная конструкция на физике. Ты можешь зумить/панить “камеру”
-        и сбивать блоки. Всё в одном <span class="kbd">index.html</span>.
+        Зажми человечка, тяни в любую сторону и отпускай — он летит в противоположную.
+        Во время полёта можно нажать <b>SUPER</b> для режима “Раскачаемся!!!”.
       </p>
-      <div class="row">
-        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-          <span class="kbd">ЛКМ</span> тянуть
-          <span class="kbd">Wheel</span> zoom
-          <span class="kbd">R</span> reset
-        </div>
-        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-          <button class="btn primary" id="goBtn"><span class="dot"></span> Поехали</button>
-          <button class="btn danger" id="nukeBtn"><span class="dot"></span> СУПЕР-УДАР</button>
-        </div>
+      <p style="margin-top:10px; opacity:.85;">
+        ✅ <b>Масштаб:</b> колесо мыши или pinch двумя пальцами.<br/>
+        ✅ <b>Панорама:</b> держи 2 пальца и двигай — камера поедет.
+      </p>
+      <button class="menu-start" id="startBtn">START GAME</button>
+      <div class="menu-mini">
+        Подсказка: <span class="kbd">R</span> — reset, <span class="kbd">D</span> — debug, <span class="kbd">+</span>/<span class="kbd">-</span> — zoom.
       </div>
     </div>
   </div>
 
-  <div class="toast" id="toast"></div>
+  <div class="hud">
+    <div class="panel">
+      <h1>Office Birds — Destruction</h1>
+      <small><b>Управление:</b> зажми человечка → тяни в любую сторону → отпусти (летит в противоположную).</small>
+      <small><b>Прицел:</b> при натяжении видно пунктирную траекторию.</small>
+      <small><b>Ломание:</b> пополам → четвертинки → исчезает.</small>
+      <div class="kv">
+        <div>Счёт:</div><div id="score">0</div>
+        <div>Сломано:</div><div id="broken">0</div>
+        <div>Попаданий:</div><div id="hits">0</div>
+        <div>Побед:</div><div id="wins">0</div>
+      </div>
+    </div>
 
-<script>
-(() => {
-  const {
-    Engine, Render, Runner, World, Bodies, Body, Composite, Events,
-    Mouse, MouseConstraint, Vector, Constraint, Query
-  } = Matter;
+    <div class="btnbar">
+      <button id="resetBtn">Reset</button>
+      <button id="debugBtn">DEBUG</button>
 
-  const canvas = document.getElementById("game");
-  const wrap = document.getElementById("wrap");
-  const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      <button id="zoomOutBtn">−</button>
+      <button id="zoomInBtn">+</button>
+      <button id="zoomResetBtn">100%</button>
+    </div>
+  </div>
 
-  const $ = (id)=>document.getElementById(id);
+  <div class="right">
+    <div class="panel">
+      <h1>Цель</h1>
+      <small>Выбей всех менеджеров 🏆</small>
+      <small>Сильный удар → шейк камеры. SUPER → затемнение + «Раскачаемся!!!»</small>
+      <div class="kv">
+        <div>Статус:</div><div id="status">Загрузка…</div>
+        <div>SUPER:</div><div id="superState">OFF</div>
+        <div>ZOOM:</div><div id="zoomLabel">100%</div>
+      </div>
+    </div>
+  </div>
 
-  const UI = {
-    powerTxt: $("powerTxt"),
-    speedTxt: $("speedTxt"),
-    brokenTxt: $("brokenTxt"),
-    fpsTxt: $("fpsTxt"),
-    hpBar: $("hpBar"),
-    hpTxt: $("hpTxt"),
-    toast: $("toast"),
-    menu: $("menu"),
-    startBtn: $("startBtn"),
-    resetBtn: $("resetBtn"),
-    debugBtn: $("debugBtn"),
-    goBtn: $("goBtn"),
-    nukeBtn: $("nukeBtn"),
-  };
+  <div class="super-fly" id="superFlyWrap">
+    <button id="superFlyBtn">SUPER ⚡</button>
+    <div class="hint">Нажми один раз, пока летишь</div>
+  </div>
 
-  // --- Assets (paths must exist in your repo) ---
-  // Background (full screen) + ground tile + optional chair decal etc.
-  const ASSETS = {
-    bg: "assets/bg.jpg",
-    ground: "assets/ground.png",
-    chair: "assets/chair.png",
-    wood: "assets/wood.png",
-    glass: "assets/glass.png",
-    metal: "assets/metal.png",
-    ball: "assets/ball.png",
-  };
+  <div id="wrap"><canvas id="c"></canvas></div>
+  <div id="toast" class="toast">…</div>
 
-  // --- Gameplay tuning ---
-  const LEVEL = {
-    worldW: 2400,
-    worldH: 1400,
-    floorHeight: 180,       // physical ground thickness
-    leftWallX: -120,
-    rightWallX: 2520,
-    sling: { x: 320, y: 850 },
-    launchMax: 190,
-  };
+  <script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
 
-  const GROUND_VIS = {
-    // visual thickness in "world units" (matches floorHeight feel)
-    hWorld: 170,
-    overlap: 30
-  };
+  <script>
+  (function(){
+    "use strict";
 
-  // Camera / view
-  const CAM = {
-    target: { x: 0, y: 0 },
-    pos: { x: 0, y: 0 },
-    zoom: 1,
-    zoomTarget: 1,
-    minZoom: 0.55,
-    maxZoom: 1.6,
-    pan: { x: 0, y: 0 },
-    panning: false,
-    panStart: null,
-    panOrigin: null,
-  };
-
-  // HUD runtime
-  let DEBUG = false;
-  let GAME_STARTED = false;
-
-  // Aim helper
-  const AIM = {
-    enabled: true,
-    samples: 22,
-    step: 0.7,
-  };
-
-  // Super hit
-  let SUPER = {
-    ready: true,
-    cd: 9000,
-    last: -1,
-    impulse: 0.038,
-  };
-
-  // --- Engine ---
-  const engine = Engine.create();
-  engine.gravity.y = 1.0;
-
-  // --- Render ---
-  const render = Render.create({
-    canvas,
-    engine,
-    options: {
-      width: 1,
-      height: 1,
-      wireframes: false,
-      background: "transparent",
-      pixelRatio: DPR,
-      hasBounds: true,
+    const $ = (id) => document.getElementById(id);
+    const toastEl = $("toast");
+    function toast(msg, ms=1400){
+      toastEl.textContent = msg;
+      toastEl.classList.add("show");
+      setTimeout(()=>toastEl.classList.remove("show"), ms);
     }
-  });
 
-  const runner = Runner.create();
-  runner.isFixed = true;
+    function loadImage(src){
+      return new Promise((resolve,reject)=>{
+        const img = new Image();
+        img.onload = ()=>resolve(img);
+        img.onerror = ()=>reject(new Error("Не загрузилась картинка: " + src));
+        img.src = src + (src.includes("?") ? "&" : "?") + "v=" + Date.now();
+      });
+    }
 
-  // Global references
-  let ground, leftWall, rightWall;
-  let slingAnchor, slingConstraint;
-  let projectile;
-  let structure = [];
-  let breakable = new Set();
-  let brokenCount = 0;
-  let maxHp = 100;
-  let hp = 100;
-  let chairDecal = null;
+    // ✅ START MENU CONTROL
+    const startMenu = $("startMenu");
+    const startBtn  = $("startBtn");
+    let GAME_STARTED = false;
 
-  // Images
-  const IMGS = {};
-  const loadImage = (src) => new Promise((resolve,reject)=>{
-    const img = new Image();
-    img.onload = ()=>resolve(img);
-    img.onerror = reject;
-    img.src = src;
-  });
+    function showMenu(){
+      GAME_STARTED = false;
+      startMenu.classList.add("show");
+      if (runner) runner.enabled = false;
+    }
+    function hideMenu(){
+      GAME_STARTED = true;
+      startMenu.classList.remove("show");
+      if (runner) runner.enabled = true;
+    }
+    startBtn.addEventListener("click", hideMenu);
 
-  // Utility
-  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
-  function lerp(a,b,t){ return a + (b-a)*t; }
+    // ассеты
+    const ASSETS = {
+      bg: "assets/bg_office.png",
+      ground: "assets/ground/ground.png",   // ✅ ДОБАВИЛИ ПОЛ
 
-  // Fit canvas / set render size
-  function resize(){
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    canvas.width = Math.floor(w * DPR);
-    canvas.height = Math.floor(h * DPR);
-    render.options.width = w;
-    render.options.height = h;
-    Render.setPixelRatio(render, DPR);
-
-    // update bounds around camera
-    updateBounds();
-  }
-
-  // Convert world->screen (with bounds)
-  function worldToScreen(wx, wy){
-    const b = render.bounds;
-    const w = render.options.width;
-    const h = render.options.height;
-    return {
-      x: (wx - b.min.x) / (b.max.x - b.min.x) * w,
-      y: (wy - b.min.y) / (b.max.y - b.min.y) * h
+      beam: "assets/office/beam.png",
+      pillar: "assets/office/pillar.png",
+      manager: "assets/office/manager.png",
+      humanIdle: "assets/player/human_idle.png",
+      humanFly: "assets/player/human_fly.png",
+      chair: "assets/player/chair.png",
+      superSkin: "assets/player/human_idle.png"
     };
-  }
 
-  function worldSizeToScreen(ww, wh){
-    const b = render.bounds;
-    const w = render.options.width;
-    const h = render.options.height;
-    return {
-      w: ww / (b.max.x - b.min.x) * w,
-      h: wh / (b.max.y - b.min.y) * h
+    // ✅ ВИЗУАЛ ПОЛА (только рисование, не влияет на физику)
+    const GROUND_VIS = {
+      hWorld: 220,        // высота полосы пола в world-единицах
+      overlap: 2,         // чтобы не было щели
+      shadeAlpha: 0.10,   // лёгкое затемнение для “объёма”
+      autoCrop: true,     // авто-обрезка прозрачных/чёрных зон сверху/снизу
+      cropThreshold: 18,
+      cropPadding: 6
     };
-  }
 
-  // Update camera bounds
-  function updateBounds(){
-    const w = render.options.width;
-    const h = render.options.height;
-    const halfW = w/(CAM.zoom*2);
-    const halfH = h/(CAM.zoom*2);
+    const {
+      Engine, Render, Runner, World, Bodies, Body,
+      Constraint, Events, Composite, Vector
+    } = Matter;
 
-    const cx = CAM.pos.x + CAM.pan.x;
-    const cy = CAM.pos.y + CAM.pan.y;
+    let engine, world, render, runner, ground;
 
-    render.bounds.min.x = cx - halfW;
-    render.bounds.max.x = cx + halfW;
-    render.bounds.min.y = cy - halfH;
-    render.bounds.max.y = cy + halfH;
-  }
+    let bird = null;
+    let birdLaunched = false;
+    let birdRespawnTimer = null;
 
-  function setCameraTarget(x,y){
-    CAM.target.x = x;
-    CAM.target.y = y;
-  }
+    let slingshot = null;
+    let slingAnchor = null;
 
-  function tickCamera(){
-    CAM.pos.x = lerp(CAM.pos.x, CAM.target.x, 0.08);
-    CAM.pos.y = lerp(CAM.pos.y, CAM.target.y, 0.08);
-    CAM.zoom = lerp(CAM.zoom, CAM.zoomTarget, 0.12);
-    updateBounds();
-  }
+    let draggingBird = false;
+    let canLaunch = true;
+    let dragView = null;
 
-  // Setup world bodies
-  function buildWorld(){
-    // Clear world
-    World.clear(engine.world, false);
-    Engine.clear(engine);
+    let DEBUG = false;
 
-    structure = [];
-    breakable = new Set();
-    brokenCount = 0;
-    hp = maxHp = 100;
+    // декор-стул (НЕ физика)
+    let chairDecal = null;
 
-    // Ground physical
-    ground = Bodies.rectangle(LEVEL.worldW/2, LEVEL.worldH - LEVEL.floorHeight/2,
-                              LEVEL.worldW + 3000, LEVEL.floorHeight, {
-      isStatic: true,
-      label: "ground",
-      render: { visible: false }
-    });
+    // SUPER
+    let superActive = false;
+    let superPulseT = 0;
+    let superBannerFrames = 0;
+    let superDim = 0;
+    let superAuraPulse = 0;
+    let birdSwingBaseAngle = 0;
 
-    leftWall = Bodies.rectangle(LEVEL.leftWallX, LEVEL.worldH/2, 200, LEVEL.worldH+2000, {
-      isStatic: true,
-      label: "wall",
-      render:{ visible:false }
-    });
-    rightWall = Bodies.rectangle(LEVEL.rightWallX, LEVEL.worldH/2, 200, LEVEL.worldH+2000, {
-      isStatic: true,
-      label: "wall",
-      render:{ visible:false }
-    });
+    // шейк
+    let shakeTime = 0;
+    let shakeMag = 0;
 
-    World.add(engine.world, [ground, leftWall, rightWall]);
+    // debris
+    const debris = [];
 
-    // Slingshot anchor
-    slingAnchor = { x: LEVEL.sling.x, y: LEVEL.sling.y };
-    projectile = createProjectile(slingAnchor.x, slingAnchor.y);
-    slingConstraint = Constraint.create({
-      pointA: slingAnchor,
-      bodyB: projectile,
-      stiffness: 0.04,
-      damping: 0.02,
-      length: 12,
-      render: { visible: false }
-    });
+    // level
+    const structure = { pillars: [], beams: [], managers: [], activated: false };
+    const stats = { score:0, broken:0, hits:0, wins:0 };
 
-    World.add(engine.world, [projectile, slingConstraint]);
+    // время жизни птицы
+    const AUTO_RESPAWN_MS = 12000;
 
-    // Build office structure
-    buildOffice();
+    // затемнение только в SUPER
+    const SUPER_VISUAL = {
+      dimTarget: 0.60,
+      vignette: 0.38
+    };
 
-    // Camera default
-    CAM.pan.x = 0; CAM.pan.y = 0;
-    setCameraTarget(LEVEL.worldW/2, LEVEL.worldH/2);
-    CAM.pos.x = CAM.target.x; CAM.pos.y = CAM.target.y;
-    CAM.zoom = CAM.zoomTarget = 0.9;
-    updateBounds();
-  }
+    // плавность
+    const FLIGHT = {
+      airFrictionFlying: 0.0032,
+      maxSpeed: 52,
+      maxAngular: 0.18,
+      settleFrictionAir: 0.012
+    };
 
-  function createProjectile(x,y){
-    const r = 28;
-    const body = Bodies.circle(x, y, r, {
-      density: 0.006,
-      restitution: 0.65,
-      friction: 0.05,
-      frictionAir: 0.008,
-      label: "ball",
-      render:{
-        sprite: IMGS.imgBall ? { texture: IMGS.imgBall.src, xScale: (r*2)/IMGS.imgBall.width, yScale:(r*2)/IMGS.imgBall.height } : undefined,
-        fillStyle: "#ffffff",
+    // урон/ломание
+    const DMG = {
+      dmgK: 0.08,
+      minHitEnergy: 1.8,
+      hpStage0: 1.25,
+      hpStage1: 1.10,
+      hpStage2: 0.90,
+      shakeEnergyThreshold: 9.0,
+      shakeMax: 22,
+      superMultiplier: 2.8,
+      superAuraRadius: 240,
+      superAuraEnergyPerTick: 12.0,
+      superAuraTickEvery: 6
+    };
+
+    const DEBRIS = {
+      ttlMs: 6500,
+      minSpeedToCountStill: 0.18,
+      stillFramesToVanish: 55,
+      airFriction: 0.020,
+    };
+
+    const SPR = {
+      pillarH: 330,
+      beamW: 440,
+
+      birdRadius: 56,
+      birdWIdle: 165,
+      birdWFly: 135,
+      birdWSuper: 190,
+
+      managerW: 86,
+      chairW: 120
+    };
+
+    const LEVEL = {
+      floorHeight: 95,
+      birdStartX: 210,
+      birdStartYOffset: 190,
+      houses: [
+        { x: 0.56, w: 470, managers: 4 },
+        { x: 0.72, w: 470, managers: 4 },
+        { x: 0.88, w: 470, managers: 3 },
+      ]
+    };
+
+    // ✅ Camera + user zoom + pan (NEW)
+    const camera = {
+      cx: 0, cy: 0,
+      tx: 0, ty: 0,
+      zoom: 1.0,
+      tzoom: 1.0,
+      smoothing: 0.14,
+
+      baseZoom: 0.86,
+      userZoom: 1.0,
+
+      // ✅ pan offsets in WORLD units
+      panX: 0,
+      panY: 0,
+      // while user pans with 2 fingers we keep it locked for some frames
+      panHoldFrames: 0
+    };
+
+    const ZOOM = {
+      min: 0.55,
+      max: 1.85,
+      step: 1.10
+    };
+
+    function lerp(a,b,t){ return a + (b-a)*t; }
+    function clamp(v,min,max){ return Math.max(min, Math.min(max,v)); }
+
+    function setUserZoom(mult, showToast=true){
+      camera.userZoom = clamp(mult, ZOOM.min, ZOOM.max);
+      const pct = Math.round(camera.userZoom * 100);
+      $("zoomLabel").textContent = pct + "%";
+      $("zoomResetBtn").textContent = pct + "%";
+      if (showToast) toast("ZOOM: " + pct + "%", 700);
+    }
+
+    // рогатка
+    const SLING = { pullMax: 420, launchK: 0.165 };
+
+    // прицеливание
+    const AIM = {
+      enabled: true,
+      steps: 26,
+      stepTicks: 6,
+      dotEvery: 1,
+      dotRadius: 3.2,
+      alphaStart: 0.85,
+      alphaEnd: 0.10
+    };
+
+    // UI супер
+    const superFlyWrap = $("superFlyWrap");
+    const superFlyBtn  = $("superFlyBtn");
+
+    function refreshSuperButtonVisibility(){
+      const shouldShow = !!(bird && birdLaunched && !superActive);
+      superFlyWrap.classList.toggle("show", shouldShow);
+      superFlyBtn.classList.toggle("super-on", superActive);
+    }
+
+    function setSuperActive(next){
+      superActive = next;
+
+      if (superActive){
+        superPulseT = 0;
+        superBannerFrames = 180;
+        superDim = Math.max(superDim, SUPER_VISUAL.dimTarget);
+        superAuraPulse = 1.0;
+        birdSwingBaseAngle = (bird && typeof bird.angle === "number") ? bird.angle : 0;
+        toast("SUPER ON ⚡", 900);
+        if (bird && birdLaunched) setBirdSuper();
+      } else {
+        toast("SUPER OFF", 700);
       }
+
+      $("superState").textContent = superActive ? "ON" : "OFF";
+      refreshSuperButtonVisibility();
+    }
+
+    superFlyBtn.addEventListener("click", ()=>{
+      if (!bird || !birdLaunched || superActive) return;
+      setSuperActive(true);
     });
-    return body;
-  }
 
-  function addBlock(x,y,w,h,mat="wood",opts={}){
-    const textures = {
-      wood: IMGS.imgWood,
-      glass: IMGS.imgGlass,
-      metal: IMGS.imgMetal
-    };
-    const img = textures[mat];
-    const body = Bodies.rectangle(x,y,w,h,{
-      density: mat==="metal"?0.008:mat==="glass"?0.005:0.006,
-      restitution: mat==="glass"?0.15:0.2,
-      friction: 0.6,
-      frictionAir: 0.012,
-      label: "block",
-      render: img ? { sprite:{ texture: img.src, xScale: w/img.width, yScale: h/img.height } } : { fillStyle:"#ffffff" },
-      ...opts
+    function updateHUD(){
+      $("score").textContent  = String(stats.score);
+      $("broken").textContent = String(stats.broken);
+      $("hits").textContent   = String(stats.hits);
+      $("wins").textContent   = String(stats.wins);
+      $("superState").textContent = superActive ? "ON" : "OFF";
+      refreshSuperButtonVisibility();
+      $("zoomLabel").textContent = Math.round(camera.userZoom * 100) + "%";
+    }
+
+    // ✅ Zoom buttons
+    $("zoomInBtn").addEventListener("click", ()=> setUserZoom(camera.userZoom * ZOOM.step));
+    $("zoomOutBtn").addEventListener("click", ()=> setUserZoom(camera.userZoom / ZOOM.step));
+    $("zoomResetBtn").addEventListener("click", ()=> setUserZoom(1.0));
+
+    $("status").textContent = "Загрузка ассетов…";
+
+    Promise.all([
+      loadImage(ASSETS.bg),
+      loadImage(ASSETS.ground),   // ✅ грузим пол
+
+      loadImage(ASSETS.beam),
+      loadImage(ASSETS.pillar),
+      loadImage(ASSETS.manager),
+      loadImage(ASSETS.humanIdle),
+      loadImage(ASSETS.humanFly),
+      loadImage(ASSETS.chair),
+      loadImage(ASSETS.superSkin)
+    ]).then(([imgBg, imgGround, imgBeam, imgPillar, imgManager, imgIdle, imgFly, imgChair, imgSuper])=>{
+      start({imgBg, imgGround, imgBeam, imgPillar, imgManager, imgIdle, imgFly, imgChair, imgSuper});
+    }).catch((e)=>{
+      console.error(e);
+      $("status").textContent = "Ошибка PNG";
+      toast("PNG ошибка — проверь assets/…", 2500);
     });
-    structure.push(body);
-    if (!opts.isStatic){
-      breakable.add(body);
+
+    // ======== BROWSER ADAPT HELPERS ========
+    function dpr(){
+      return Math.max(1, Math.min(2.5, window.devicePixelRatio || 1));
     }
-    World.add(engine.world, body);
-    return body;
-  }
-
-  function buildOffice(){
-    // A compact “office” stack
-    const baseY = LEVEL.worldH - LEVEL.floorHeight - 10;
-    const startX = 1650;
-
-    // Base platform
-    addBlock(startX, baseY - 18, 520, 26, "metal", { isStatic:false });
-    addBlock(startX - 200, baseY - 18, 120, 26, "metal", { isStatic:false });
-    addBlock(startX + 200, baseY - 18, 120, 26, "metal", { isStatic:false });
-
-    // Columns
-    addBlock(startX - 160, baseY - 110, 36, 170, "wood");
-    addBlock(startX + 160, baseY - 110, 36, 170, "wood");
-    addBlock(startX,       baseY - 110, 36, 170, "wood");
-
-    // Mid shelf
-    addBlock(startX, baseY - 210, 460, 22, "metal");
-    addBlock(startX - 200, baseY - 255, 120, 18, "glass");
-    addBlock(startX + 200, baseY - 255, 120, 18, "glass");
-
-    // Top
-    addBlock(startX, baseY - 320, 360, 22, "metal");
-    addBlock(startX - 120, baseY - 370, 90, 18, "glass");
-    addBlock(startX + 120, baseY - 370, 90, 18, "glass");
-
-    // Extra blocks
-    addBlock(startX - 260, baseY - 80, 60, 60, "wood");
-    addBlock(startX + 260, baseY - 80, 60, 60, "wood");
-    addBlock(startX - 260, baseY - 140, 60, 60, "glass");
-    addBlock(startX + 260, baseY - 140, 60, 60, "glass");
-
-    // Optional chair decal (just for fun)
-    chairDecal = { x: startX - 280, y: baseY - 40, s: 0.34 };
-  }
-
-  // Reset
-  function resetAll(IMGS){
-    buildWorld();
-    runner.enabled = GAME_STARTED; // respect menu
-    toast("RESET", 650);
-  }
-
-  // Menu
-  function showMenu(){
-    UI.menu.classList.remove("hidden");
-    GAME_STARTED = false;
-    runner.enabled = false;
-  }
-  function hideMenu(){
-    UI.menu.classList.add("hidden");
-    GAME_STARTED = true;
-    runner.enabled = true;
-  }
-
-  // Toast
-  let toastT = null;
-  function toast(msg, ms=900){
-    UI.toast.textContent = msg;
-    UI.toast.classList.add("show");
-    clearTimeout(toastT);
-    toastT = setTimeout(()=>UI.toast.classList.remove("show"), ms);
-  }
-
-  // --- Interactions ---
-  const mouse = Mouse.create(canvas);
-  const mouseConstraint = MouseConstraint.create(engine, {
-    mouse,
-    constraint: {
-      stiffness: 0.18,
-      damping: 0.08,
-      render: { visible: false }
-    }
-  });
-  World.add(engine.world, mouseConstraint);
-
-  // Dragging slingshot logic
-  let draggingBall = false;
-  let dragStart = null;
-
-  function pointerWorld(){
-    // Convert mouse position to world position using bounds
-    const b = render.bounds;
-    const w = render.options.width;
-    const h = render.options.height;
-    const mx = mouse.position.x;
-    const my = mouse.position.y;
-    const wx = b.min.x + (mx / w) * (b.max.x - b.min.x);
-    const wy = b.min.y + (my / h) * (b.max.y - b.min.y);
-    return { x: wx, y: wy };
-  }
-
-  // Camera panning with right click / two-finger or space?
-  let isRightDown = false;
-
-  window.addEventListener("contextmenu", (e)=>e.preventDefault());
-  canvas.addEventListener("pointerdown", (e)=>{
-    canvas.setPointerCapture(e.pointerId);
-    if (e.button === 2){ // right
-      isRightDown = true;
-      CAM.panning = true;
-      CAM.panStart = { x: e.clientX, y: e.clientY };
-      CAM.panOrigin = { x: CAM.pan.x, y: CAM.pan.y };
-      return;
+    function resizeCanvasToDisplaySize(canvas){
+      const ratio = dpr();
+      const w = Math.floor(window.innerWidth * ratio);
+      const h = Math.floor(window.innerHeight * ratio);
+      if (canvas.width !== w || canvas.height !== h){
+        canvas.width = w;
+        canvas.height = h;
+      }
     }
 
-    // detect click near projectile
-    const pw = pointerWorld();
-    const d = Vector.magnitude(Vector.sub(pw, projectile.position));
-    if (d < 64){
-      draggingBall = true;
-      dragStart = { ...pw };
+    // ✅ авто-обрезка “пустых” зон у ground.png
+    function prepareGroundCrop(img){
+      img.__cropY = 0;
+      img.__cropH = img.height;
+
+      if (!GROUND_VIS.autoCrop) return;
+
+      const c = document.createElement("canvas");
+      c.width = img.width;
+      c.height = img.height;
+      const ctx = c.getContext("2d", { willReadFrequently:true });
+      ctx.drawImage(img, 0, 0);
+
+      const data = ctx.getImageData(0, 0, img.width, img.height).data;
+      const thr = GROUND_VIS.cropThreshold;
+      const rowMean = new Float32Array(img.height);
+
+      for (let y=0; y<img.height; y++){
+        let sum = 0;
+        let count = 0;
+        const rowStart = y * img.width * 4;
+        for (let x=0; x<img.width; x++){
+          const i = rowStart + x*4;
+          const r = data[i], g = data[i+1], b = data[i+2];
+          const m = (r + g + b) / 3;
+          sum += m;
+          count++;
+        }
+        rowMean[y] = sum / Math.max(1, count);
+      }
+
+      let top = -1, bottom = -1;
+      for (let y=0; y<img.height; y++){
+        if (rowMean[y] > thr){ top = y; break; }
+      }
+      for (let y=img.height-1; y>=0; y--){
+        if (rowMean[y] > thr){ bottom = y; break; }
+      }
+
+      // если ничего не нашли — оставляем как есть
+      if (top === -1 || bottom === -1 || bottom - top < 20) return;
+
+      const pad = GROUND_VIS.cropPadding;
+      top = Math.max(0, top - pad);
+      bottom = Math.min(img.height-1, bottom + pad);
+
+      img.__cropY = top;
+      img.__cropH = (bottom - top + 1);
     }
-  });
 
-  canvas.addEventListener("pointermove", (e)=>{
-    if (CAM.panning){
-      const dx = e.clientX - CAM.panStart.x;
-      const dy = e.clientY - CAM.panStart.y;
-      // convert screen delta to world delta
-      const b = render.bounds;
-      const w = render.options.width;
-      const h = render.options.height;
-      const worldW = (b.max.x - b.min.x);
-      const worldH = (b.max.y - b.min.y);
-      CAM.pan.x = CAM.panOrigin.x - dx / w * worldW;
-      CAM.pan.y = CAM.panOrigin.y - dy / h * worldH;
-      updateBounds();
-      return;
+    function start(IMGS){
+      $("status").textContent = "Запуск…";
+
+      // ✅ подготовка кропа для пола
+      prepareGroundCrop(IMGS.imgGround);
+
+      const canvas = $("c");
+      const wrap = $("wrap");
+
+      engine = Engine.create();
+      world = engine.world;
+      world.gravity.y = 0.98;
+
+      engine.positionIterations = 8;
+      engine.velocityIterations = 7;
+      engine.constraintIterations = 3;
+
+      resizeCanvasToDisplaySize(canvas);
+
+      render = Render.create({
+        element: wrap,
+        canvas,
+        engine,
+        options: {
+          width: window.innerWidth,
+          height: window.innerHeight,
+          wireframes: false,
+
+          // ✅ ВАЖНО: делаем прозрачным, чтобы Matter не “затирал” наш пол
+          background: "transparent",
+
+          pixelRatio: dpr(),
+          hasBounds: true
+        }
+      });
+
+      runner = Runner.create();
+
+      ground = Bodies.rectangle(
+        2600,
+        window.innerHeight - LEVEL.floorHeight/2,
+        9000,
+        LEVEL.floorHeight,
+        { isStatic:true, friction:1.0, restitution:0.0,
+          render: DEBUG ? { fillStyle:"rgba(255,255,255,0.10)" } : { fillStyle:"rgba(0,0,0,0)" } }
+      );
+      World.add(world, ground);
+
+      buildLevel(IMGS);
+      spawnBird(IMGS);
+      setupSlingshot();
+      setupCameraInitial();
+      bindInput(IMGS);
+      bindPhysics(IMGS);
+
+      Events.on(render, "afterRender", ()=>{
+        const ctx = render.context;
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+        // ✅ Рисуем ФОН + ПОЛ “СНИЗУ”, чтобы не ломать остальной рендер
+        // destination-over = рисует позади уже нарисованных тел
+        ctx.globalCompositeOperation = "destination-over";
+        drawGround(IMGS);
+        ctx.drawImage(IMGS.imgBg, 0, 0, render.canvas.width, render.canvas.height);
+        ctx.globalCompositeOperation = "source-over";
+
+        // ---- дальше всё как было (НИЧЕГО НЕ ВЫКИНУТО) ----
+        if (AIM.enabled) drawAimTrajectory();
+        if (chairDecal) drawChairDecal(IMGS);
+        drawSuperOverlay();
+
+        ctx.restore();
+      });
+
+      Render.run(render);
+      Runner.run(runner, engine);
+
+      // ✅ Start paused (menu shown)
+      runner.enabled = false;
+
+      $("resetBtn").addEventListener("click", ()=>{ resetAll(IMGS); showMenu(); });
+      $("debugBtn").addEventListener("click", ()=>{
+        DEBUG = !DEBUG;
+        toast(DEBUG ? "DEBUG: ON" : "DEBUG: OFF", 900);
+        resetAll(IMGS);
+        if (!GAME_STARTED) showMenu();
+      });
+
+      // ✅ wheel zoom (desktop)
+      canvas.addEventListener("wheel", (e)=>{
+        e.preventDefault();
+        const dir = Math.sign(e.deltaY);
+        if (dir > 0) setUserZoom(camera.userZoom / ZOOM.step, false);
+        else setUserZoom(camera.userZoom * ZOOM.step, false);
+      }, { passive:false });
+
+      // ✅ keyboard shortcuts
+      window.addEventListener("keydown", (e)=>{
+        if (e.key === "r" || e.key === "R"){ resetAll(IMGS); showMenu(); }
+        if (e.key === "d" || e.key === "D"){ DEBUG = !DEBUG; toast(DEBUG ? "DEBUG: ON" : "DEBUG: OFF", 900); resetAll(IMGS); if (!GAME_STARTED) showMenu(); }
+        if (e.key === "+" || e.key === "="){ setUserZoom(camera.userZoom * ZOOM.step); }
+        if (e.key === "-" || e.key === "_"){ setUserZoom(camera.userZoom / ZOOM.step); }
+        if ((e.key === "Enter" || e.key === " ") && !GAME_STARTED){ hideMenu(); }
+      });
+
+      window.addEventListener("resize", ()=>onResize(IMGS));
+
+      $("status").textContent = "Готово";
+      setUserZoom(1.0, false);
+      updateHUD();
+
+      showMenu();
     }
 
-    if (!draggingBall) return;
-    const pw = pointerWorld();
-    const delta = Vector.sub(pw, slingAnchor);
-    const dist = Vector.magnitude(delta);
-    const max = LEVEL.launchMax;
-    const clamped = dist > max ? Vector.mult(Vector.normalise(delta), max) : delta;
-    Body.setPosition(projectile, Vector.add(slingAnchor, clamped));
-    Body.setVelocity(projectile, { x: 0, y: 0 });
-  });
+    function onResize(IMGS){
+      resizeCanvasToDisplaySize(render.canvas);
+      render.options.pixelRatio = dpr();
+      render.options.width = window.innerWidth;
+      render.options.height = window.innerHeight;
 
-  canvas.addEventListener("pointerup", (e)=>{
-    if (e.button === 2){
-      isRightDown = false;
-      CAM.panning = false;
-      return;
-    }
+      // ✅ пересчитать кроп пола при смене размеров (без влияния на механику)
+      prepareGroundCrop(IMGS.imgGround);
 
-    if (!draggingBall) return;
-    draggingBall = false;
-
-    // release: remove constraint and shoot
-    const delta = Vector.sub(slingAnchor, projectile.position);
-    const power = Vector.magnitude(delta);
-    const dir = Vector.normalise(delta);
-    const force = Vector.mult(dir, power * 0.0009);
-    Body.applyForce(projectile, projectile.position, force);
-
-    UI.powerTxt.textContent = power.toFixed(0);
-    toast("FIRE!", 550);
-  });
-
-  // Keyboard
-  window.addEventListener("keydown", (e)=>{
-    if (e.key.toLowerCase() === "r"){
       resetAll(IMGS);
+      if (!GAME_STARTED) showMenu();
     }
-  });
 
-  // Zoom (wheel)
-  canvas.addEventListener("wheel", (e)=>{
-    e.preventDefault();
-    const delta = -Math.sign(e.deltaY) * 0.08;
-    CAM.zoomTarget = clamp(CAM.zoomTarget + delta, CAM.minZoom, CAM.maxZoom);
-  }, { passive:false });
+    function resetAll(IMGS){
+      if (birdRespawnTimer){ clearTimeout(birdRespawnTimer); birdRespawnTimer = null; }
 
-  // Touch: two-finger pan/zoom
-  let touches = new Map();
-  let pinchStart = null;
+      Composite.clear(world, false);
+      World.add(world, ground);
 
-  canvas.addEventListener("touchstart", (e)=>{
-    for (const t of e.changedTouches){
-      touches.set(t.identifier, { x: t.clientX, y: t.clientY });
+      stats.score = 0; stats.broken = 0; stats.hits = 0; stats.wins = 0;
+      structure.pillars = []; structure.beams = []; structure.managers = []; structure.activated = false;
+
+      debris.length = 0;
+
+      bird = null; slingshot = null; slingAnchor = null;
+      draggingBird = false; canLaunch = true; birdLaunched = false; dragView = null;
+
+      chairDecal = null;
+
+      superActive = false; superPulseT = 0; superBannerFrames = 0; superDim = 0; superAuraPulse = 0;
+      birdSwingBaseAngle = 0;
+
+      shakeTime = 0; shakeMag = 0;
+
+      // ✅ reset camera pan too
+      camera.panX = 0;
+      camera.panY = 0;
+      camera.panHoldFrames = 0;
+
+      buildLevel(IMGS);
+      spawnBird(IMGS);
+      setupSlingshot();
+      setupCameraInitial();
+
+      refreshSuperButtonVisibility();
+      $("status").textContent = "Готово";
+      updateHUD();
     }
-    if (touches.size === 2){
-      const arr = [...touches.values()];
-      const dx = arr[0].x - arr[1].x;
-      const dy = arr[0].y - arr[1].y;
-      pinchStart = {
-        dist: Math.hypot(dx,dy),
-        zoom: CAM.zoomTarget,
-        pan: { x: CAM.pan.x, y: CAM.pan.y },
-        mid: { x: (arr[0].x+arr[1].x)/2, y:(arr[0].y+arr[1].y)/2 }
-      };
-    }
-  }, { passive:true });
 
-  canvas.addEventListener("touchmove", (e)=>{
-    for (const t of e.changedTouches){
-      touches.set(t.identifier, { x: t.clientX, y: t.clientY });
+    // ======== BREAKABLE METADATA ========
+    function setBreakMeta(body, type, tex, sx, sy){
+      body.__type = type;
+      body.__broken = false;
+      body.__breakStage = 0; // 0=целый, 1=половинки, 2=четвертинки
+      body.__tex = tex;
+      body.__sx = sx;
+      body.__sy = sy;
+      body.__hp = DMG.hpStage0;
+      return body;
     }
-    if (touches.size === 2 && pinchStart){
-      const arr = [...touches.values()];
-      const dx = arr[0].x - arr[1].x;
-      const dy = arr[0].y - arr[1].y;
-      const dist = Math.hypot(dx,dy);
-      const ratio = dist / pinchStart.dist;
-      CAM.zoomTarget = clamp(pinchStart.zoom * ratio, CAM.minZoom, CAM.maxZoom);
 
-      // pan by midpoint delta
-      const mid = { x: (arr[0].x+arr[1].x)/2, y:(arr[0].y+arr[1].y)/2 };
-      const mdx = mid.x - pinchStart.mid.x;
-      const mdy = mid.y - pinchStart.mid.y;
+    // ======== LEVEL BUILD ========
+    function buildLevel(IMGS){
+      const baseY = (typeof ground !== "undefined" && ground)
+        ? (ground.position.y - LEVEL.floorHeight/2)
+        : (window.innerHeight - LEVEL.floorHeight);
+
+      structure.pillars = [];
+      structure.beams = [];
+      structure.managers = [];
+
+      for (let hi=0; hi<LEVEL.houses.length; hi++){
+        const H = LEVEL.houses[hi];
+        const cx = Math.round(window.innerWidth * H.x);
+        const w = H.w;
+
+        const leftX  = cx - Math.round(w/2);
+        const rightX = cx + Math.round(w/2);
+
+        const pillarScale = SPR.pillarH / IMGS.imgPillar.height;
+        const beamScale   = SPR.beamW   / IMGS.imgBeam.width;
+
+        const pillarH = IMGS.imgPillar.height * pillarScale;
+        const pillarW = IMGS.imgPillar.width  * pillarScale;
+
+        const pLeft = Bodies.rectangle(leftX, baseY - pillarH/2, pillarW, pillarH, {
+          isStatic:true,
+          render: DEBUG ? { fillStyle:"rgba(0,210,255,0.20)", strokeStyle:"rgba(110,240,255,0.9)", lineWidth:2 }
+                        : { sprite:{ texture: ASSETS.pillar, xScale: pillarScale, yScale: pillarScale } }
+        });
+        setBreakMeta(pLeft, "pillar", ASSETS.pillar, pillarScale, pillarScale);
+
+        const pRight = Bodies.rectangle(rightX, baseY - pillarH/2, pillarW, pillarH, {
+          isStatic:true,
+          render: DEBUG ? { fillStyle:"rgba(0,210,255,0.20)", strokeStyle:"rgba(110,240,255,0.9)", lineWidth:2 }
+                        : { sprite:{ texture: ASSETS.pillar, xScale: pillarScale, yScale: pillarScale } }
+        });
+        setBreakMeta(pRight, "pillar", ASSETS.pillar, pillarScale, pillarScale);
+
+        const beamW = IMGS.imgBeam.width  * beamScale;
+        const beamH = IMGS.imgBeam.height * beamScale;
+
+        const yBot  = baseY - 46;
+        const yMid  = baseY - 182;
+        const yTop  = baseY - 318;
+        const yTop2 = baseY - 454;
+
+        function makeBeam(x,y){
+          const b = Bodies.rectangle(x, y, beamW, beamH, {
+            isStatic:true,
+            friction:0.95,
+            restitution:0.02,
+            density:0.0022,
+            chamfer:{ radius:4 },
+            render: DEBUG ? { fillStyle:"rgba(255,120,0,0.25)", strokeStyle:"rgba(255,170,90,0.9)", lineWidth:2 }
+                          : { sprite:{ texture: ASSETS.beam, xScale: beamScale, yScale: beamScale } }
+          });
+          setBreakMeta(b, "beam", ASSETS.beam, beamScale, beamScale);
+          return b;
+        }
+
+        const bTop2 = makeBeam(cx, yTop2);
+        const bTop  = makeBeam(cx, yTop);
+        const bMid  = makeBeam(cx, yMid);
+        const bBot  = makeBeam(cx, yBot);
+
+        // managers
+        const mScale = SPR.managerW / IMGS.imgManager.width;
+        const mW = IMGS.imgManager.width * mScale;
+        const mH = IMGS.imgManager.height * mScale;
+
+        const tiers = [
+          { y: yTop2 - beamH/2 - mH/2 + 10, span: w*0.50 },
+          { y: yTop  - beamH/2 - mH/2 + 10, span: w*0.46 },
+          { y: yMid  - beamH/2 - mH/2 + 10, span: w*0.42 }
+        ];
+
+        const managers = [];
+        for (let i=0; i<H.managers; i++){
+          const tier = tiers[i % tiers.length];
+          const t = (i+1)/(H.managers+1);
+          const x = cx - tier.span/2 + t * tier.span;
+          const y = tier.y;
+
+          const m = Bodies.rectangle(x, y, mW, mH, {
+            isStatic:true,
+            friction:0.85,
+            restitution:0.02,
+            density:0.002,
+            render: DEBUG ? { fillStyle:"rgba(255,255,255,0.16)", strokeStyle:"rgba(255,255,255,0.9)", lineWidth:2 }
+                          : { sprite:{ texture: ASSETS.manager, xScale: mScale, yScale: mScale } }
+          });
+          setBreakMeta(m, "manager", ASSETS.manager, mScale, mScale);
+          m.__alive = true;
+          managers.push(m);
+        }
+
+        structure.pillars.push(pLeft, pRight);
+        structure.beams.push(bTop2, bTop, bMid, bBot);
+        structure.managers.push(...managers);
+
+        World.add(world, [pLeft, pRight, bTop2, bTop, bMid, bBot, ...managers]);
+      }
+    }
+
+    function activateStructure(){
+      if (structure.activated) return;
+      structure.activated = true;
+
+      const all = [...structure.beams, ...structure.pillars, ...structure.managers];
+      for (const b of all){
+        Body.setStatic(b,false);
+        b.frictionAir = 0.010;
+      }
+    }
+
+    // ======== BIRD ========
+    function spawnBird(IMGS){
+      const baseY = (typeof ground !== "undefined" && ground)
+        ? (ground.position.y - LEVEL.floorHeight/2)
+        : (window.innerHeight - LEVEL.floorHeight);
+      const start = { x: LEVEL.birdStartX, y: baseY - LEVEL.birdStartYOffset };
+
+      const idleScale = SPR.birdWIdle / IMGS.imgIdle.width;
+      const flyScale  = SPR.birdWFly  / IMGS.imgFly.width;
+      const superScale = SPR.birdWSuper / IMGS.imgIdle.width;
+
+      bird = Bodies.circle(start.x, start.y, SPR.birdRadius, {
+        restitution:0.20,
+        friction:0.95,
+        frictionAir:0.012,
+        density:0.0048,
+        render: DEBUG ? { fillStyle:"rgba(255,0,0,0.22)", strokeStyle:"rgba(255,0,0,0.9)", lineWidth:2 }
+                      : { sprite:{ texture: ASSETS.humanIdle, xScale: idleScale, yScale: idleScale } }
+      });
+
+      bird.__start = start;
+      bird.__idleTexture = ASSETS.humanIdle;
+      bird.__idleScale = idleScale;
+
+      bird.__flyTexture = ASSETS.humanFly;
+      bird.__flyScale = flyScale;
+
+      bird.__superTexture = ASSETS.superSkin;
+      bird.__superScale = superScale;
+
+      birdLaunched = false;
+      World.add(world, bird);
+      refreshSuperButtonVisibility();
+    }
+
+    function setBirdIdle(){
+      if (!bird || DEBUG) return;
+      bird.render.sprite.texture = bird.__idleTexture;
+      bird.render.sprite.xScale = bird.__idleScale;
+      bird.render.sprite.yScale = bird.__idleScale;
+    }
+    function setBirdFly(){
+      if (!bird || DEBUG) return;
+      bird.render.sprite.texture = bird.__flyTexture;
+      bird.render.sprite.xScale = bird.__flyScale;
+      bird.render.sprite.yScale = bird.__flyScale;
+    }
+    function setBirdSuper(){
+      if (!bird || DEBUG) return;
+      bird.render.sprite.texture = bird.__superTexture;
+      bird.render.sprite.xScale = bird.__superScale;
+      bird.render.sprite.yScale = bird.__superScale;
+    }
+
+    function setupSlingshot(){
+      const start = bird.__start;
+      slingAnchor = { x:start.x, y:start.y };
+      slingshot = Constraint.create({
+        pointA: { x:slingAnchor.x, y:slingAnchor.y },
+        bodyB: bird,
+        stiffness: 0.035,
+        damping: 0.06,
+        length: 0,
+        render: { visible: DEBUG }
+      });
+      World.add(world, slingshot);
+    }
+    function detachSlingshot(){
+      if (!slingshot) return;
+      World.remove(world, slingshot);
+      slingshot = null;
+    }
+
+    // декор-стул (не физика)
+    function spawnChairDecal(IMGS, atPos){
+      const chairScale = SPR.chairW / IMGS.imgChair.width;
+      chairDecal = { x: atPos.x, y: atPos.y + 64, w: IMGS.imgChair.width*chairScale, h: IMGS.imgChair.height*chairScale };
+    }
+    function clearChairDecal(){ chairDecal = null; }
+
+    function scheduleBirdRespawn(IMGS, delayMs){
+      if (birdRespawnTimer) return;
+      birdRespawnTimer = setTimeout(()=>{
+        birdRespawnTimer = null;
+
+        if (bird){ World.remove(world, bird); bird = null; }
+        if (slingshot){ World.remove(world, slingshot); slingshot = null; }
+
+        clearChairDecal();
+
+        superActive = false;
+        superPulseT = 0;
+        superBannerFrames = 0;
+        superDim = 0;
+        superAuraPulse = 0;
+        birdSwingBaseAngle = 0;
+
+        spawnBird(IMGS);
+        setupSlingshot();
+        setBirdIdle();
+
+        birdLaunched = false;
+        draggingBird = false;
+        canLaunch = true;
+        dragView = null;
+
+        refreshSuperButtonVisibility();
+        $("status").textContent = "Готово";
+        updateHUD();
+      }, delayMs);
+    }
+
+    // ======== CAMERA ========
+    function setupCameraInitial(){
+      const baseY = (typeof ground !== "undefined" && ground)
+        ? (ground.position.y - LEVEL.floorHeight/2)
+        : (window.innerHeight - LEVEL.floorHeight);
+      camera.cx = camera.tx = 900;
+      camera.cy = camera.ty = baseY - 300;
+      camera.baseZoom = 0.86;
+      camera.zoom = camera.tzoom = camera.baseZoom * camera.userZoom;
+      applyCamera(true);
+    }
+
+    function triggerShake(energy){
+      const over = energy - DMG.shakeEnergyThreshold;
+      const strength = clamp(over * 2.0, 6, DMG.shakeMax);
+      shakeMag = Math.max(shakeMag, strength);
+      shakeTime = Math.max(shakeTime, 20);
+    }
+
+    function applyCamera(force=false){
+      camera.cx = force ? camera.tx : lerp(camera.cx, camera.tx, camera.smoothing);
+      camera.cy = force ? camera.ty : lerp(camera.cy, camera.ty, camera.smoothing);
+      camera.zoom = force ? camera.tzoom : lerp(camera.zoom, camera.tzoom, camera.smoothing);
+
+      let sx = 0, sy = 0;
+      if (shakeTime > 0){
+        const amp = shakeMag * (shakeTime / 20);
+        sx = (Math.random()*2 - 1) * amp;
+        sy = (Math.random()*2 - 1) * amp;
+      }
+
+      const vw = window.innerWidth / camera.zoom;
+      const vh = window.innerHeight / camera.zoom;
+
+      render.bounds.min.x = (camera.cx + sx) - vw/2;
+      render.bounds.min.y = (camera.cy + sy) - vh/2;
+      render.bounds.max.x = render.bounds.min.x + vw;
+      render.bounds.max.y = render.bounds.min.y + vh;
+
+      Render.lookAt(render, { min: render.bounds.min, max: render.bounds.max });
+    }
+
+    // ======== INPUT ========
+    function pointerToWorld(clientX, clientY){
+      const rect = render.canvas.getBoundingClientRect();
+      const sx = (clientX - rect.left) / rect.width;
+      const sy = (clientY - rect.top) / rect.height;
+      const b = (draggingBird && dragView) ? dragView : render.bounds;
+      return { x: b.min.x + sx * (b.max.x - b.min.x), y: b.min.y + sy * (b.max.y - b.min.y) };
+    }
+
+    // ✅ pinch+pan support (2 pointers)
+    const pointers = new Map();
+    let pinching = false;
+    let pinchStartDist = 0;
+    let pinchStartZoom = 1.0;
+
+    // NEW for pan:
+    let lastMid = null;
+
+    function dist2(a,b){
+      const dx = a.x-b.x, dy=a.y-b.y;
+      return Math.sqrt(dx*dx+dy*dy);
+    }
+    function midPoint(a,b){
+      return { x:(a.x+b.x)/2, y:(a.y+b.y)/2 };
+    }
+
+    function startPinchIfPossible(){
+      if (pointers.size !== 2) return;
+      const pts = Array.from(pointers.values());
+      pinching = true;
+      pinchStartDist = dist2(pts[0], pts[1]);
+      pinchStartZoom = camera.userZoom;
+
+      lastMid = midPoint(pts[0], pts[1]);
+
+      // stop slingshot drag if pinch begins
+      draggingBird = false;
+      dragView = null;
+
+      // hold pan (manual) for a bit
+      camera.panHoldFrames = Math.max(camera.panHoldFrames, 60);
+    }
+
+    function updatePinchAndPan(){
+      if (!pinching || pointers.size !== 2) return;
+
+      const pts = Array.from(pointers.values());
+      const d = dist2(pts[0], pts[1]);
+      if (pinchStartDist > 0){
+        const factor = d / pinchStartDist;
+        setUserZoom(pinchStartZoom * factor, false);
+      }
+
+      // ✅ PAN: move by midpoint delta (screen -> world)
+      const m = midPoint(pts[0], pts[1]);
+      if (lastMid){
+        const dx = (m.x - lastMid.x);
+        const dy = (m.y - lastMid.y);
+        lastMid = m;
+
+        // convert screen delta to world delta using current bounds
+        const rect = render.canvas.getBoundingClientRect();
+        const b = render.bounds;
+        const vw = (b.max.x - b.min.x);
+        const vh = (b.max.y - b.min.y);
+
+        const worldDX = (dx / rect.width)  * vw;
+        const worldDY = (dy / rect.height) * vh;
+
+        // finger drag right should move camera right (scene left),
+        // so we subtract worldDX to "pull" the world
+        camera.panX -= worldDX;
+        camera.panY -= worldDY;
+
+        // clamp pan a bit (avoid losing the scene)
+        camera.panX = clamp(camera.panX, -2200, 2200);
+        camera.panY = clamp(camera.panY, -1200, 1200);
+
+        camera.panHoldFrames = Math.max(camera.panHoldFrames, 60);
+      }
+    }
+
+    function endPinchIfNeeded(){
+      if (pointers.size < 2){
+        pinching = false;
+        lastMid = null;
+        // keep pan for a bit after gesture, then decay
+        camera.panHoldFrames = Math.max(camera.panHoldFrames, 45);
+      }
+    }
+
+    function onDown(clientX, clientY, setCaptureFn){
+      if (!GAME_STARTED) return;
+      if (pinching) return;
+      if (!bird || birdLaunched || !canLaunch) return;
+
+      const p = pointerToWorld(clientX, clientY);
+      const dist = Math.hypot(p.x - bird.position.x, p.y - bird.position.y);
+      if (dist <= SPR.birdRadius * 1.25){
+        if (setCaptureFn) setCaptureFn();
+        draggingBird = true;
+        dragView = { min: { x: render.bounds.min.x, y: render.bounds.min.y }, max: { x: render.bounds.max.x, y: render.bounds.max.y } };
+        Body.setStatic(bird, true);
+        $("status").textContent = "Тяни…";
+      }
+    }
+
+    function onMove(clientX, clientY){
+      if (!GAME_STARTED) return;
+      if (pinching) return;
+      if (!bird || !draggingBird || birdLaunched) return;
+
+      const start = bird.__start;
+      const p = pointerToWorld(clientX, clientY);
+      const dx = p.x - start.x, dy = p.y - start.y;
+
+      const dist = Math.hypot(dx, dy) || 1;
+      const k = Math.min(1, SLING.pullMax / dist);
+
+      Body.setPosition(bird, { x: start.x + dx * k, y: start.y + dy * k });
+      Body.setVelocity(bird, { x: 0, y: 0 });
+      Body.setAngularVelocity(bird, 0);
+    }
+
+    function onUp(IMGS){
+      if (!GAME_STARTED) return;
+      if (pinching) return;
+      if (!bird || !draggingBird || birdLaunched) { draggingBird = false; dragView = null; return; }
+      draggingBird = false; dragView = null;
+      if (!canLaunch) return;
+
+      activateStructure();
+
+      setBirdFly();
+      spawnChairDecal(IMGS, bird.__start);
+      detachSlingshot();
+
+      Body.setStatic(bird, false);
+
+      const pull = Vector.sub(bird.__start, bird.position);
+      const d = Math.min(Vector.magnitude(pull), SLING.pullMax);
+
+      if (d > 8){
+        const dir = Vector.normalise(pull);
+        const vel = Vector.mult(dir, d * SLING.launchK);
+
+        Body.setVelocity(bird, { x: 0, y: 0 });
+        Body.setAngularVelocity(bird, 0);
+        Body.setVelocity(bird, vel);
+
+        bird.frictionAir = FLIGHT.airFrictionFlying;
+        birdSwingBaseAngle = 0;
+      }
+
+      birdLaunched = true;
+      canLaunch = false;
+      stats.score += 1;
+      updateHUD();
+      $("status").textContent = "Полетел!";
+
+      refreshSuperButtonVisibility();
+      scheduleBirdRespawn(IMGS, AUTO_RESPAWN_MS);
+    }
+
+    function bindInput(IMGS){
+      const canvas = render.canvas;
+
+      if (window.PointerEvent){
+        canvas.addEventListener("pointerdown", (e)=>{
+          pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+
+          if (pointers.size === 2){
+            startPinchIfPossible();
+          } else {
+            onDown(e.clientX, e.clientY, ()=>canvas.setPointerCapture(e.pointerId));
+          }
+        });
+
+        canvas.addEventListener("pointermove", (e)=>{
+          if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+          if (pointers.size === 2){
+            updatePinchAndPan();
+          } else {
+            onMove(e.clientX, e.clientY);
+          }
+        });
+
+        canvas.addEventListener("pointerup", (e)=>{
+          pointers.delete(e.pointerId);
+          endPinchIfNeeded();
+          onUp(IMGS);
+        });
+
+        canvas.addEventListener("pointercancel", (e)=>{
+          pointers.delete(e.pointerId);
+          endPinchIfNeeded();
+          onUp(IMGS);
+        });
+
+        return;
+      }
+
+      // Mouse fallback (pan on desktop can be added later if you want)
+      let mouseDown = false;
+      canvas.addEventListener("mousedown", (e)=>{
+        mouseDown = true;
+        onDown(e.clientX, e.clientY, null);
+      });
+      window.addEventListener("mousemove", (e)=>{
+        if (!mouseDown) return;
+        onMove(e.clientX, e.clientY);
+      });
+      window.addEventListener("mouseup", ()=>{
+        mouseDown = false;
+        onUp(IMGS);
+      });
+
+      // Touch fallback (single finger only)
+      canvas.addEventListener("touchstart", (e)=>{
+        e.preventDefault();
+        const t = e.changedTouches[0];
+        onDown(t.clientX, t.clientY, null);
+      }, {passive:false});
+
+      canvas.addEventListener("touchmove", (e)=>{
+        e.preventDefault();
+        const t = e.changedTouches[0];
+        onMove(t.clientX, t.clientY);
+      }, {passive:false});
+
+      canvas.addEventListener("touchend", (e)=>{
+        e.preventDefault();
+        onUp(IMGS);
+      }, {passive:false});
+
+      canvas.addEventListener("touchcancel", (e)=>{
+        e.preventDefault();
+        onUp(IMGS);
+      }, {passive:false});
+    }
+
+    // ======== TRAJECTORY (aim) ========
+    function worldToScreen(x, y){
       const b = render.bounds;
-      const w = render.options.width;
-      const h = render.options.height;
-      const worldW = (b.max.x - b.min.x);
-      const worldH = (b.max.y - b.min.y);
-      CAM.pan.x = pinchStart.pan.x - mdx / w * worldW;
-      CAM.pan.y = pinchStart.pan.y - mdy / h * worldH;
-      updateBounds();
-    }
-  }, { passive:true });
-
-  canvas.addEventListener("touchend", (e)=>{
-    for (const t of e.changedTouches){
-      touches.delete(t.identifier);
-    }
-    if (touches.size < 2) pinchStart = null;
-  }, { passive:true });
-
-  // --- Draw helpers ---
-  function drawAimTrajectory(){
-    // simple ballistic preview from current ball position opposite to sling direction
-    const ctx = render.context;
-    const start = projectile.position;
-    const delta = Vector.sub(slingAnchor, projectile.position);
-    const power = Vector.magnitude(delta);
-    if (power < 10) return;
-
-    const dir = Vector.normalise(delta);
-    const v0 = Vector.mult(dir, power * 0.45);
-
-    ctx.save();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = "rgba(110,231,255,.35)";
-    ctx.fillStyle = "rgba(255,255,255,.55)";
-
-    ctx.beginPath();
-    for (let i=0;i<AIM.samples;i++){
-      const t = i * AIM.step;
-      const p = {
-        x: start.x + v0.x * t,
-        y: start.y + v0.y * t + 0.5 * engine.gravity.y * 38 * t * t
+      return {
+        x: (x - b.min.x) / (b.max.x - b.min.x) * render.canvas.width,
+        y: (y - b.min.y) / (b.max.y - b.min.y) * render.canvas.height
       };
-      const s = worldToScreen(p.x, p.y);
-      if (i===0) ctx.moveTo(s.x, s.y);
-      else ctx.lineTo(s.x, s.y);
     }
-    ctx.stroke();
 
-    // dots
-    for (let i=0;i<AIM.samples;i+=3){
-      const t = i * AIM.step;
-      const p = {
-        x: start.x + v0.x * t,
-        y: start.y + v0.y * t + 0.5 * engine.gravity.y * 38 * t * t
+    // ✅ нужно для пола (размеры world -> screen)
+    function worldSizeToScreen(w, h){
+      const b = render.bounds;
+      const vw = (b.max.x - b.min.x);
+      const vh = (b.max.y - b.min.y);
+      return {
+        w: (w / vw) * render.canvas.width,
+        h: (h / vh) * render.canvas.height
       };
-      const s = worldToScreen(p.x, p.y);
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, 2.4, 0, Math.PI*2);
-      ctx.fill();
     }
 
-    ctx.restore();
-  }
-
-  function drawChairDecal(IMGS){
-    if (!chairDecal || !IMGS.imgChair) return;
-    const ctx = render.context;
-    const s = worldToScreen(chairDecal.x, chairDecal.y);
-    const size = 220 * chairDecal.s;
-    ctx.save();
-    ctx.globalAlpha = 0.9;
-    ctx.drawImage(IMGS.imgChair, s.x - size/2, s.y - size/2, size, size);
-    ctx.restore();
-  }
-
-  function drawSuperOverlay(){
-    // small cue for super ability
-    const ctx = render.context;
-    ctx.save();
-    ctx.setTransform(1,0,0,1,0,0);
-    const x = 18;
-    const y = window.innerHeight - 64;
-    const w = 220;
-    const h = 44;
-
-    ctx.globalAlpha = 0.9;
-    ctx.fillStyle = "rgba(15,22,35,.62)";
-    ctx.strokeStyle = "rgba(255,255,255,.14)";
-    ctx.lineWidth = 1;
-    roundRect(ctx, x, y, w, h, 14);
-    ctx.fill();
-    ctx.stroke();
-
-    const now = performance.now();
-    const elapsed = now - SUPER.last;
-    const t = SUPER.ready ? 1 : clamp(elapsed / SUPER.cd, 0, 1);
-
-    ctx.fillStyle = "rgba(255,255,255,.82)";
-    ctx.font = "700 12px " + getComputedStyle(document.documentElement).getPropertyValue("--font");
-    ctx.fillText("СУПЕР-УДАР", x+14, y+18);
-    ctx.font = "700 11px " + getComputedStyle(document.documentElement).getPropertyValue("--font");
-    ctx.fillStyle = "rgba(255,255,255,.62)";
-    ctx.fillText(SUPER.ready ? "готов" : ("кд " + Math.ceil((SUPER.cd-elapsed)/1000) + "с"), x+14, y+34);
-
-    // bar
-    const bx = x+110, by = y+18, bw = 92, bh = 10;
-    ctx.fillStyle = "rgba(255,255,255,.08)";
-    roundRect(ctx, bx, by, bw, bh, 999);
-    ctx.fill();
-    ctx.fillStyle = "rgba(110,231,255,.90)";
-    roundRect(ctx, bx, by, bw*t, bh, 999);
-    ctx.fill();
-
-    ctx.restore();
-  }
-
-  function roundRect(ctx, x,y,w,h,r){
-    const rr = Math.min(r, w/2, h/2);
-    ctx.beginPath();
-    ctx.moveTo(x+rr, y);
-    ctx.arcTo(x+w, y, x+w, y+h, rr);
-    ctx.arcTo(x+w, y+h, x, y+h, rr);
-    ctx.arcTo(x, y+h, x, y, rr);
-    ctx.arcTo(x, y, x+w, y, rr);
-    ctx.closePath();
-  }
-
-  function drawGround(IMGS){
+    // ✅ РЕНДЕР ПОЛА (без влияния на физику)
+    function drawGround(IMGS){
       if (!IMGS || !IMGS.imgGround) return;
 
       const img = IMGS.imgGround;
       const b = render.bounds;
 
-      // ✅ верх физического пола (ground) — чтобы визуал совпадал с физикой
       const baseY = (typeof ground !== "undefined" && ground)
         ? (ground.position.y - LEVEL.floorHeight/2)
         : (window.innerHeight - LEVEL.floorHeight);
@@ -1117,207 +1361,527 @@
       ctx.save();
 
       for (let x = xStart; x <= xEnd; x += tileWWorld){
-        const sx = worldToScreen(x, topY).x;
-        ctx.drawImage(img, 0, srcY, img.width, srcH, sx, sY, tileWpx, tileHpx);
+        const sX = worldToScreen(x, topY).x;
+        ctx.drawImage(
+          img,
+          0, srcY, img.width, srcH,
+          sX, sY, tileWpx, tileHpx
+        );
+      }
+
+      // лёгкая тень для “массы”
+      if (GROUND_VIS.shadeAlpha > 0){
+        ctx.globalAlpha = GROUND_VIS.shadeAlpha;
+        ctx.fillStyle = "rgba(0,0,0,1)";
+        const left = worldToScreen(b.min.x, topY).x;
+        const right = worldToScreen(b.max.x, topY).x;
+        const width = (right - left);
+        const height = worldSizeToScreen(0, hWorld).h;
+        ctx.fillRect(left, sY, width, height);
+        ctx.globalAlpha = 1;
       }
 
       ctx.restore();
     }
 
-  // Damage tracking (simple)
-  function updateHp(){
-    let total = 0;
-    for (const b of breakable){
-      const v = Vector.magnitude(b.velocity);
-      const av = Math.abs(b.angularVelocity);
-      total += v*0.9 + av*14;
-    }
-    // convert to “damage”
-    const dmg = clamp(total*0.05, 0, 2.0);
-    hp = clamp(hp - dmg, 0, maxHp);
-    UI.hpBar.style.width = (hp/maxHp*100).toFixed(1) + "%";
-    UI.hpTxt.textContent = hp <= 0 ? "Офис в хлам. RESET, чтобы начать заново." : "Разрушай конструкцию попаданиями.";
-  }
+    function drawAimTrajectory(){
+      if (!bird || birdLaunched || !draggingBird || !canLaunch) return;
 
-  // Collision => broken count
-  Events.on(engine, "collisionStart", (ev)=>{
-    for (const pair of ev.pairs){
-      const a = pair.bodyA, b = pair.bodyB;
-      // count “broken” if big impact and body is breakable
-      const impact = pair.collision.depth * 120 + Vector.magnitude(pair.collision.penetration)*90;
-      if (impact > 30){
-        if (breakable.has(a) && !a.__broken){
-          a.__broken = true; brokenCount++;
-        }
-        if (breakable.has(b) && !b.__broken){
-          b.__broken = true; brokenCount++;
-        }
+      const ctx = render.context;
+      const start = bird.__start;
+
+      const pull = Vector.sub(start, bird.position);
+      const dist = Math.min(Vector.magnitude(pull), SLING.pullMax);
+      if (dist < 6) return;
+
+      const dir = Vector.normalise(pull);
+      const v0 = Vector.mult(dir, dist * SLING.launchK);
+
+      const gTick = (world.gravity.y || 1) * (world.gravity.scale || 0.001) * 1000 / 60;
+
+      let x = bird.position.x;
+      let y = bird.position.y;
+      let vx = v0.x;
+      let vy = v0.y;
+
+      const sA = worldToScreen(start.x, start.y);
+      const sB = worldToScreen(bird.position.x, bird.position.y);
+
+      ctx.save();
+      ctx.lineWidth = 2.2;
+      ctx.setLineDash([7, 8]);
+      ctx.strokeStyle = "rgba(255,255,255,0.35)";
+      ctx.beginPath();
+      ctx.moveTo(sA.x, sA.y);
+      ctx.lineTo(sB.x, sB.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      for (let i=0; i<AIM.steps; i++){
+        x += vx * AIM.stepTicks;
+        y += vy * AIM.stepTicks;
+        vy += gTick * AIM.stepTicks;
+
+        if (i % AIM.dotEvery !== 0) continue;
+
+        const p = worldToScreen(x, y);
+        const a = lerp(AIM.alphaStart, AIM.alphaEnd, i / (AIM.steps - 1));
+
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(255, 225, 140, ${a})`;
+        ctx.arc(p.x, p.y, AIM.dotRadius, 0, Math.PI*2);
+        ctx.fill();
       }
+
+      const sc = worldToScreen(start.x, start.y);
+      const bb = render.bounds;
+      const vw = (bb.max.x - bb.min.x);
+      const rPx = (SLING.pullMax / vw) * render.canvas.width;
+
+      ctx.beginPath();
+      ctx.lineWidth = 2.0;
+      ctx.strokeStyle = "rgba(255, 225, 140, 0.18)";
+      ctx.arc(sc.x, sc.y, rPx, 0, Math.PI*2);
+      ctx.stroke();
+
+      ctx.restore();
     }
-  });
 
-  // --- SUPER HIT ---
-  function superHit(){
-    const now = performance.now();
-    if (!SUPER.ready) return toast("Супер ещё на кд", 850);
+    function drawChairDecal(IMGS){
+      if (!chairDecal) return;
+      const ctx = render.context;
+      const img = IMGS.imgChair;
+      const b = render.bounds;
 
-    SUPER.ready = false;
-    SUPER.last = now;
+      if (chairDecal.x < b.min.x - 500 || chairDecal.x > b.max.x + 500) return;
 
-    // impulse to all blocks
-    for (const body of structure){
-      if (body.isStatic) continue;
-      const dir = Vector.normalise(Vector.sub(body.position, slingAnchor));
-      const f = Vector.mult(dir, SUPER.impulse * body.mass);
-      Body.applyForce(body, body.position, f);
+      const p = worldToScreen(chairDecal.x, chairDecal.y);
+
+      const vw = (b.max.x - b.min.x);
+      const sw = chairDecal.w / vw * render.canvas.width;
+      const sh = chairDecal.h / (b.max.y - b.min.y) * render.canvas.height;
+
+      ctx.save();
+      ctx.drawImage(img, p.x - sw/2, p.y - sh/2, sw, sh);
+      ctx.restore();
     }
-    toast("SUPER!", 700);
 
-    setTimeout(()=>{ SUPER.ready = true; }, SUPER.cd);
-  }
+    function drawSuperOverlay(){
+      if (!superActive && superDim <= 0.004 && superBannerFrames <= 0) return;
 
-  // --- Main loop ---
-  let lastT = performance.now();
-  let fpsEMA = 60;
+      const ctx = render.context;
+      const W = render.canvas.width;
+      const H = render.canvas.height;
 
-  Events.on(engine, "beforeUpdate", ()=>{
-    tickCamera();
-  });
-
-  Events.on(render, "afterRender", ()=>{
-        const ctx = render.context;
+      if (superDim > 0.004){
         ctx.save();
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalAlpha = clamp(superDim, 0, 0.80);
+        ctx.fillStyle = "rgba(0,0,0,1)";
+        ctx.fillRect(0,0,W,H);
+        ctx.restore();
 
-        // ✅ Рисуем ФОН + ПОЛ “СНИЗУ”, чтобы не ломать остальной рендер
-        // destination-over = рисует позади уже нарисованных тел
-        ctx.globalCompositeOperation = "destination-over";
-        drawGround(IMGS);
-        ctx.drawImage(IMGS.imgBg, 0, 0, render.canvas.width, render.canvas.height);
-        ctx.globalCompositeOperation = "source-over";
+        ctx.save();
+        ctx.globalAlpha = clamp(SUPER_VISUAL.vignette * superDim, 0, 0.60);
+        const grdV = ctx.createRadialGradient(W*0.5, H*0.52, Math.min(W,H)*0.18, W*0.5, H*0.52, Math.min(W,H)*0.78);
+        grdV.addColorStop(0, "rgba(0,0,0,0)");
+        grdV.addColorStop(1, "rgba(0,0,0,1)");
+        ctx.fillStyle = grdV;
+        ctx.fillRect(0,0,W,H);
+        ctx.restore();
 
-        // ---- дальше всё как было (НИЧЕГО НЕ ВЫКИНУТО) ----
-        if (AIM.enabled) drawAimTrajectory();
-        if (chairDecal) drawChairDecal(IMGS);
-        drawSuperOverlay();
+        const pulse = 0.16 + Math.sin((superPulseT||0)*0.10)*0.07;
+        ctx.save();
+        ctx.globalAlpha = clamp(superAuraPulse * pulse, 0, 0.30);
+        const grd = ctx.createRadialGradient(W*0.5, H*0.50, 40, W*0.5, H*0.50, Math.min(W,H)*0.62);
+        grd.addColorStop(0, "rgba(255,210,70,0.70)");
+        grd.addColorStop(1, "rgba(255,210,70,0.0)");
+        ctx.fillStyle = grd;
+        ctx.fillRect(0,0,W,H);
+        ctx.restore();
+      }
+
+      if (superBannerFrames > 0){
+        const t = superBannerFrames / 180;
+        const alpha = clamp(0.10 + t, 0, 1);
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        const big = Math.max(120, Math.min(210, Math.floor(W * 0.13)));
+        ctx.font = `900 ${big}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial`;
+
+        ctx.lineWidth = 16;
+        ctx.strokeStyle = "rgba(0,0,0,0.68)";
+        ctx.strokeText("Раскачаемся!!!", W*0.50, H*0.22);
+
+        ctx.shadowColor = "rgba(255,210,70,0.98)";
+        ctx.shadowBlur = 34;
+
+        ctx.fillStyle = "rgba(255,235,170,0.98)";
+        ctx.fillText("Раскачаемся!!!", W*0.50, H*0.22);
+
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = alpha * 0.16;
+        const huge = Math.max(180, Math.min(320, Math.floor(W * 0.20)));
+        ctx.font = `900 ${huge}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial`;
+        ctx.fillStyle = "rgba(255,210,70,0.85)";
+        ctx.fillText("Раскачаемся!!!", W*0.50, H*0.54);
 
         ctx.restore();
+      }
+    }
+
+    // ======== BREAK LOGIC: halves -> quarters -> vanish ========
+    function addDebrisBody(body){
+      body.__debris = true;
+      body.frictionAir = DEBRIS.airFriction;
+      debris.push({ body, ttl: Date.now() + DEBRIS.ttlMs, stillFrames: 0 });
+      World.add(world, body);
+    }
+
+    function copyRenderMeta(srcBody, dstBody){
+      dstBody.__type = srcBody.__type;
+      dstBody.__tex = srcBody.__tex;
+      dstBody.__sx = srcBody.__sx;
+      dstBody.__sy = srcBody.__sy;
+      dstBody.__breakStage = srcBody.__breakStage;
+      dstBody.__broken = false;
+      dstBody.__debris = true;
+      dstBody.__hp = DMG.hpStage0;
+
+      if (!DEBUG){
+        dstBody.render.sprite.texture = srcBody.__tex;
+        dstBody.render.sprite.xScale = srcBody.__sx;
+        dstBody.render.sprite.yScale = srcBody.__sy;
+      }
+    }
+
+    function makePiece(x,y,w,h,angle,srcBody){
+      const piece = Bodies.rectangle(x, y, Math.max(10,w), Math.max(10,h), {
+        isStatic:false,
+        friction:0.95,
+        restitution:0.05,
+        density:0.0022,
+        chamfer:{ radius:2 },
+        render: DEBUG
+          ? { fillStyle:"rgba(255,255,255,0.12)", strokeStyle:"rgba(255,255,255,0.5)", lineWidth:1 }
+          : { sprite:{ texture: srcBody.__tex, xScale: srcBody.__sx, yScale: srcBody.__sy } }
+      });
+      Body.setAngle(piece, angle);
+      copyRenderMeta(srcBody, piece);
+      return piece;
+    }
+
+    function splitBodyByStage(body){
+      if (!body) return;
+      const stage = body.__breakStage || 0;
+
+      if (body.__type === "manager" && body.__alive){
+        body.__alive = false;
+        stats.hits += 1;
+        stats.score += 30;
+        updateHUD();
+        checkWin();
+      }
+
+      if (stage >= 2){
+        World.remove(world, body);
+        stats.broken += 1;
+        stats.score += 6;
+        updateHUD();
+        return;
+      }
+
+      const pos = body.position;
+      const angle = body.angle;
+      const w = body.bounds.max.x - body.bounds.min.x;
+      const h = body.bounds.max.y - body.bounds.min.y;
+
+      const right = Vector.rotate({x:1,y:0}, angle);
+      const down  = Vector.rotate({x:0,y:1}, angle);
+
+      World.remove(world, body);
+
+      const baseVel = body.velocity || {x:0,y:0};
+      const baseAV = body.angularVelocity || 0;
+
+      if (stage === 0){
+        const splitAlongX = (w >= h);
+        if (splitAlongX){
+          const hw = w/2;
+          const ph = h;
+          const offset = w/4;
+
+          const p1 = Vector.add(pos, Vector.mult(right, -offset));
+          const p2 = Vector.add(pos, Vector.mult(right, +offset));
+
+          const a = makePiece(p1.x, p1.y, hw*0.95, ph*0.95, angle, body);
+          const b = makePiece(p2.x, p2.y, hw*0.95, ph*0.95, angle, body);
+
+          a.__breakStage = 1; b.__breakStage = 1;
+          a.__hp = DMG.hpStage1;
+          b.__hp = DMG.hpStage1;
+
+          Body.setVelocity(a, { x: baseVel.x + (Math.random()-0.5)*1.4, y: baseVel.y + (Math.random()-0.5)*1.4 });
+          Body.setVelocity(b, { x: baseVel.x + (Math.random()-0.5)*1.4, y: baseVel.y + (Math.random()-0.5)*1.4 });
+          Body.setAngularVelocity(a, baseAV + (Math.random()-0.5)*0.30);
+          Body.setAngularVelocity(b, baseAV + (Math.random()-0.5)*0.30);
+
+          addDebrisBody(a); addDebrisBody(b);
+        } else {
+          const hh = h/2;
+          const pw = w;
+          const offset = h/4;
+
+          const p1 = Vector.add(pos, Vector.mult(down, -offset));
+          const p2 = Vector.add(pos, Vector.mult(down, +offset));
+
+          const a = makePiece(p1.x, p1.y, pw*0.95, hh*0.95, angle, body);
+          const b = makePiece(p2.x, p2.y, pw*0.95, hh*0.95, angle, body);
+
+          a.__breakStage = 1; b.__breakStage = 1;
+          a.__hp = DMG.hpStage1;
+          b.__hp = DMG.hpStage1;
+
+          Body.setVelocity(a, { x: baseVel.x + (Math.random()-0.5)*1.4, y: baseVel.y + (Math.random()-0.5)*1.4 });
+          Body.setVelocity(b, { x: baseVel.x + (Math.random()-0.5)*1.4, y: baseVel.y + (Math.random()-0.5)*1.4 });
+          Body.setAngularVelocity(a, baseAV + (Math.random()-0.5)*0.30);
+          Body.setAngularVelocity(b, baseAV + (Math.random()-0.5)*0.30);
+
+          addDebrisBody(a); addDebrisBody(b);
+        }
+
+        stats.broken += 1;
+        stats.score += 12;
+        updateHUD();
+        return;
+      }
+
+      // stage === 1 -> quarters
+      const qw = w/2;
+      const qh = h/2;
+      const ox = w/4;
+      const oy = h/4;
+
+      const offsets = [
+        Vector.add(Vector.mult(right, -ox), Vector.mult(down, -oy)),
+        Vector.add(Vector.mult(right, +ox), Vector.mult(down, -oy)),
+        Vector.add(Vector.mult(right, -ox), Vector.mult(down, +oy)),
+        Vector.add(Vector.mult(right, +ox), Vector.mult(down, +oy))
+      ];
+
+      for (const off of offsets){
+        const p = Vector.add(pos, off);
+        const piece = makePiece(p.x, p.y, qw*0.92, qh*0.92, angle, body);
+        piece.__breakStage = 2;
+        piece.__hp = DMG.hpStage2;
+
+        Body.setVelocity(piece, { x: baseVel.x + (Math.random()-0.5)*2.0, y: baseVel.y + (Math.random()-0.5)*2.0 });
+        Body.setAngularVelocity(piece, baseAV + (Math.random()-0.5)*0.45);
+        addDebrisBody(piece);
+      }
+
+      stats.broken += 1;
+      stats.score += 16;
+      updateHUD();
+    }
+
+    // ======== COLLISION ENERGY ========
+    function impactEnergy(bodyA, bodyB){
+      const rv = Vector.sub(bodyA.velocity, bodyB.velocity);
+      const rel = Vector.magnitude(rv);
+      const massRef = (bird && (bodyA === bird || bodyB === bird)) ? bird.mass : Math.min(bodyA.mass||1, bodyB.mass||1);
+      return 0.5 * massRef * rel * rel;
+    }
+
+    function tryBreak(body, energy, fromBird){
+      if (!body || !body.__type) return;
+      if (body.isStatic) return;
+
+      const allow = (fromBird === true) || (superActive === true);
+      if (!allow) return;
+
+      const mult = superActive ? DMG.superMultiplier : 1.0;
+      const e = energy * mult;
+      if (e < DMG.minHitEnergy) return;
+
+      const dmg = e * DMG.dmgK;
+      body.__hp = (typeof body.__hp === "number" ? body.__hp : DMG.hpStage0) - dmg;
+
+      if (body.__hp > 0) return;
+      splitBodyByStage(body);
+    }
+
+    function processCollisionPairs(pairs){
+      if (!structure.activated) return;
+
+      for (const pair of pairs){
+        const a = pair.bodyA, b = pair.bodyB;
+        const energy = impactEnergy(a, b);
+
+        if (energy >= DMG.shakeEnergyThreshold) triggerShake(energy);
+
+        if (bird && (a === bird || b === bird)){
+          const other = (a === bird) ? b : a;
+          tryBreak(other, energy, true);
+        }
+      }
+    }
+
+    // ======== PHYSICS LOOP ========
+    function bindPhysics(IMGS){
+      Events.on(engine, "collisionStart", (event)=>{
+        processCollisionPairs(event.pairs);
       });
 
-  Render.run(render);
-  Runner.run(runner, engine);
+      Events.on(engine, "collisionActive", (event)=>{
+        for (const pair of event.pairs){
+          const energy = impactEnergy(pair.bodyA, pair.bodyB) * 0.12;
+          if (energy >= DMG.shakeEnergyThreshold) triggerShake(energy);
+        }
+      });
 
-  // ✅ Start paused (menu shown)
-  runner.enabled = false;
+      Events.on(engine, "beforeUpdate", ()=>{
+        const baseY = (typeof ground !== "undefined" && ground)
+        ? (ground.position.y - LEVEL.floorHeight/2)
+        : (window.innerHeight - LEVEL.floorHeight);
 
-  $("resetBtn").addEventListener("click", ()=>{ resetAll(IMGS); showMenu(); });
-  $("debugBtn").addEventListener("click", ()=>{
-    DEBUG = !DEBUG;
-    toast(DEBUG ? "DEBUG: ON" : "DEBUG: OFF", 900);
-    resetAll(IMGS);
-    if (!GAME_STARTED) showMenu();
-  });
+        // debris cleanup
+        for (let i = debris.length - 1; i >= 0; i--){
+          const d = debris[i];
+          const body = d.body;
+          if (!body){ debris.splice(i,1); continue; }
 
-  // Menu buttons
-  UI.startBtn.addEventListener("click", ()=>hideMenu());
-  UI.goBtn.addEventListener("click", ()=>hideMenu());
-  UI.nukeBtn.addEventListener("click", ()=>{ hideMenu(); superHit(); });
+          const sp = Vector.magnitude(body.velocity);
+          d.stillFrames = (sp < DEBRIS.minSpeedToCountStill) ? (d.stillFrames + 1) : 0;
 
-  // Update HUD loop
-  Events.on(engine, "afterUpdate", ()=>{
-    const v = Vector.magnitude(projectile.velocity);
-    UI.speedTxt.textContent = v.toFixed(1);
-    UI.brokenTxt.textContent = brokenCount.toString();
+          if (Date.now() > d.ttl || d.stillFrames >= DEBRIS.stillFramesToVanish){
+            World.remove(world, body);
+            debris.splice(i,1);
+          }
+        }
 
-    const now = performance.now();
-    const dt = now - lastT;
-    lastT = now;
-    const fps = 1000 / Math.max(1, dt);
-    fpsEMA = lerp(fpsEMA, fps, 0.08);
-    UI.fpsTxt.textContent = fpsEMA.toFixed(0);
+        // bird smooth flight
+        if (bird && birdLaunched){
+          const v = bird.velocity;
+          const speed = Math.hypot(v.x, v.y);
+          if (speed > FLIGHT.maxSpeed){
+            const k = FLIGHT.maxSpeed / speed;
+            Body.setVelocity(bird, { x: v.x * k, y: v.y * k });
+          }
+          const av = bird.angularVelocity || 0;
+          if (Math.abs(av) > FLIGHT.maxAngular){
+            Body.setAngularVelocity(bird, Math.sign(av) * FLIGHT.maxAngular);
+          }
+          if (speed < 1.1){
+            bird.frictionAir = lerp(bird.frictionAir, FLIGHT.settleFrictionAir, 0.06);
+          }
+        }
 
-    updateHp();
+        // shake decay
+        if (shakeTime > 0){
+          shakeTime -= 1;
+          shakeMag = lerp(shakeMag, 0, 0.22);
+        }
 
-    // keep projectile attached unless launched far enough
-    if (!draggingBall && slingConstraint.bodyB){
-      const dist = Vector.magnitude(Vector.sub(projectile.position, slingAnchor));
-      if (dist > LEVEL.launchMax + 30){
-        // detach
-        slingConstraint.bodyB = null;
-        setTimeout(()=>{
-          // respawn after some time
-          projectile = createProjectile(slingAnchor.x, slingAnchor.y);
-          World.add(engine.world, projectile);
-          slingConstraint.bodyB = projectile;
-        }, 1400);
+        // super fade
+        if (superActive){
+          superDim = lerp(superDim, SUPER_VISUAL.dimTarget, 0.10);
+          superAuraPulse = lerp(superAuraPulse, 1.0, 0.10);
+        } else {
+          superDim = lerp(superDim, 0.0, 0.12);
+          superAuraPulse = lerp(superAuraPulse, 0.0, 0.12);
+        }
+        if (superBannerFrames > 0) superBannerFrames -= 1;
+
+        // SUPER: скин + качание + аура ударов
+        if (superActive && bird && birdLaunched){
+          superPulseT += 1;
+          setBirdSuper();
+
+          const swing = Math.sin(superPulseT * 0.24) * 0.55;
+          const targetAngle = birdSwingBaseAngle + swing;
+          Body.setAngularVelocity(bird, 0);
+          Body.setAngle(bird, targetAngle);
+
+          if ((superPulseT % DMG.superAuraTickEvery) === 0){
+            const bodies = Composite.allBodies(world);
+            const r = DMG.superAuraRadius;
+            const r2 = r*r;
+
+            for (const obj of bodies){
+              if (!obj || obj === bird) continue;
+              if (!obj.__type) continue;
+
+              const dx = obj.position.x - bird.position.x;
+              const dy = obj.position.y - bird.position.y;
+              const dist2 = dx*dx + dy*dy;
+              if (dist2 > r2) continue;
+
+              const t = 1 - (Math.sqrt(dist2) / r);
+              const bonusEnergy = DMG.superAuraEnergyPerTick * (0.35 + 0.65*t);
+
+              tryBreak(obj, bonusEnergy, false);
+
+              if (!obj.isStatic){
+                const dir = Vector.normalise({x:dx, y:dy});
+                Body.applyForce(obj, obj.position, { x: dir.x * 0.016 * t, y: dir.y * 0.016 * t });
+              }
+            }
+          }
+        }
+
+        // camera during drag (keep as before)
+        if (draggingBird && !birdLaunched){
+          camera.tx = camera.cx; camera.ty = camera.cy; camera.tzoom = camera.zoom;
+          applyCamera(false);
+          return;
+        }
+
+        // ✅ base follow
+        const followZoom = (bird && birdLaunched) ? 1.10 : 0.86;
+
+        let baseTx, baseTy;
+        if (bird && birdLaunched){
+          baseTx = bird.position.x + 280;
+          baseTy = bird.position.y - 140;
+        } else {
+          baseTx = 900;
+          baseTy = baseY - 300;
+        }
+
+        // ✅ pan hold/decay: if user recently panned, keep; otherwise slowly return to 0
+        if (camera.panHoldFrames > 0){
+          camera.panHoldFrames -= 1;
+        } else {
+          camera.panX = lerp(camera.panX, 0, 0.045);
+          camera.panY = lerp(camera.panY, 0, 0.045);
+          if (Math.abs(camera.panX) < 0.15) camera.panX = 0;
+          if (Math.abs(camera.panY) < 0.15) camera.panY = 0;
+        }
+
+        camera.tx = baseTx + camera.panX;
+        camera.ty = baseTy + camera.panY;
+        camera.tzoom = followZoom * camera.userZoom;
+
+        applyCamera(false);
+        refreshSuperButtonVisibility();
+      });
+    }
+
+    function checkWin(){
+      const alive = structure.managers.some(m => m.__alive);
+      if (!alive){
+        stats.wins += 1;
+        stats.score += 140;
+        updateHUD();
+        toast("ПОБЕДА! Все менеджеры выбиты 🏆", 1600);
       }
     }
 
-    // Auto camera follow a bit while launched
-    if (!draggingBall){
-      const vx = Math.abs(projectile.velocity.x);
-      if (vx > 2){
-        setCameraTarget(projectile.position.x + 250, projectile.position.y - 80);
-      } else {
-        setCameraTarget(LEVEL.worldW/2, LEVEL.worldH/2);
-      }
-    }
-  });
-
-  // Toggle debug draw
-  Events.on(render, "beforeRender", ()=>{
-    render.options.wireframes = false;
-    if (DEBUG){
-      // show body bounds via engine debug-ish
-      render.options.showAngleIndicator = true;
-      render.options.showVelocity = true;
-      render.options.showDebug = true;
-    } else {
-      render.options.showAngleIndicator = false;
-      render.options.showVelocity = false;
-      render.options.showDebug = false;
-    }
-  });
-
-  // Start
-  async function boot(){
-    resize();
-    window.addEventListener("resize", resize);
-
-    // Load images
-    const [imgBg, imgGround, imgChair, imgWood, imgGlass, imgMetal, imgBall] = await Promise.all([
-      loadImage(ASSETS.bg),
-      loadImage(ASSETS.ground),
-      loadImage(ASSETS.chair),
-      loadImage(ASSETS.wood),
-      loadImage(ASSETS.glass),
-      loadImage(ASSETS.metal),
-      loadImage(ASSETS.ball),
-    ]);
-
-    IMGS.imgBg = imgBg;
-    IMGS.imgGround = imgGround;
-    IMGS.imgChair = imgChair;
-    IMGS.imgWood = imgWood;
-    IMGS.imgGlass = imgGlass;
-    IMGS.imgMetal = imgMetal;
-    IMGS.imgBall = imgBall;
-
-    // Optional: auto crop ground if it has transparency header
-    IMGS.imgGround.__cropY = 0;
-    IMGS.imgGround.__cropH = IMGS.imgGround.height;
-
-    buildWorld();
-    showMenu();
-    toast("Assets loaded", 900);
-  }
-
-  boot().catch((e)=>{
-    console.error(e);
-    toast("Ошибка загрузки ассетов. Проверь пути.", 2200);
-  });
-
-})();
-</script>
+  })();
+  </script>
 </body>
 </html>
